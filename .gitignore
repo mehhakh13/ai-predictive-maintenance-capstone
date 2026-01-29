@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.pyc
+.env
+
+# Mac
+.DS_Store
+
+# Data (do NOT push)
+FMUCD.zip
+fmucd_data/
+FMUCD_CLEANED.csv
+*.csv
+*.xlsx
+
+# FMUCD extracted folder (your exact folder name)
+Facility Management Unified Classification Database (FMUCD)/
