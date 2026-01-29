@@ -15,3 +15,24 @@ FMUCD_CLEANED.csv
 
 # FMUCD extracted folder (your exact folder name)
 Facility Management Unified Classification Database (FMUCD)/
+node_modules
+
+# Python
+venv/
+__pycache__/
+*.pkl
+
+# Node / React
+node_modules/
+
+# Data
+data/
+*.csv
+*.zip
+
+# Env
+.env
+
+# OS
+.DS_Store
+
