@@ -2,6 +2,7 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import Navbar from './components/Navbar';
 import HomePage from './pages/HomePage';
 import RiskHeatmapPage from './pages/RiskHeatmapPage';
+import CostAnalysisPage from './pages/CostAnalysisPage';
 import Dashboard from './pages/Dashboard';
 import Prediction from './pages/Prediction';
 import RiskRanking from './pages/RiskRanking';
@@ -17,6 +18,7 @@ function App() {
           <Routes>
             <Route path="/" element={<HomePage />} />
             <Route path="/risk-heatmap" element={<RiskHeatmapPage />} />
+            <Route path="/cost-analysis" element={<CostAnalysisPage />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/prediction" element={<Prediction />} />
             <Route path="/risk-ranking" element={<RiskRanking />} />
