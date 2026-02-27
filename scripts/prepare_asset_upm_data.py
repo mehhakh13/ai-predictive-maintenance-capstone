@@ -119,6 +119,13 @@ def main():
     print(f"  Loaded {len(df):,} work orders")
     print(f"  Original columns: {len(df.columns)}")
 
+    # Filter to UniversityID in {10, 11, 12} for focused analysis
+    print("\n  Filtering to UniversityID in {10, 11, 12}...")
+    df = df[df['UniversityID'].isin([10, 11, 12])]
+    print(f"  After filter: {len(df):,} work orders")
+    print(f"  Universities: {sorted(df['UniversityID'].unique())}")
+    print(f"  Buildings: {df['BuildingID'].nunique()}")
+
     # Rename columns for easier handling
     print("  Renaming columns...")
     df.rename(columns={
