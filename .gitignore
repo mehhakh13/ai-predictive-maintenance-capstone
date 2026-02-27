@@ -1,38 +1,63 @@
 # Python
 __pycache__/
-*.pyc
-.env
-
-# Mac
-.DS_Store
-
-# Data (do NOT push)
-FMUCD.zip
-fmucd_data/
-FMUCD_CLEANED.csv
-*.csv
-*.xlsx
-
-# FMUCD extracted folder (your exact folder name)
-Facility Management Unified Classification Database (FMUCD)/
-node_modules
-
-# Python
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
 venv/
-__pycache__/
-*.pkl
-
-# Node / React
-node_modules/
+ENV/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
 
 # Data
-data/
+data/processed/
 *.csv
-*.zip
+*.pkl
 
-# Env
+# Models
+models/
+*.joblib
+*.h5
+*.pt
+*.pth
+
+# Environment
 .env
+.env.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
 
 # OS
 .DS_Store
+Thumbs.db
+
+# Notebooks
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# Logs
+*.log
+logs/
+
+# Streamlit
+.streamlit/
 
