@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { LayoutDashboard, TrendingUp, AlertCircle, BarChart3 } from 'lucide-react';
+import { LayoutDashboard, TrendingUp, AlertCircle, BarChart3, DollarSign } from 'lucide-react';
 
 const HomePage = () => {
   const dashboards = [
@@ -13,11 +13,19 @@ const HomePage = () => {
       featured: true
     },
     {
+      title: 'Maintenance Cost Analysis',
+      description: 'PPM vs UPM cost impact, top expensive systems, cost trends, and outlier detection.',
+      icon: DollarSign,
+      path: '/cost-analysis',
+      color: '#10b981',
+      featured: true
+    },
+    {
       title: 'Prediction Dashboard',
       description: 'Make predictions for individual assets and work orders.',
       icon: TrendingUp,
       path: '/prediction',
-      color: '#10b981'
+      color: '#8b5cf6'
     },
     {
       title: 'Risk Ranking',
