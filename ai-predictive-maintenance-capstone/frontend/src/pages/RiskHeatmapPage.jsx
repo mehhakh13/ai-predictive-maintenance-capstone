@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useRiskHeatmapData } from '../hooks/useRiskHeatmapData';
 import KpiRow from '../components/RiskHeatmap/KpiRow';
 import Heatmap from '../components/RiskHeatmap/Heatmap';
+import SubsystemHeatmap from '../components/RiskHeatmap/SubsystemHeatmap';
 import InsightsPanel from '../components/RiskHeatmap/InsightsPanel';
 import RiskCharts from '../components/RiskHeatmap/RiskCharts';
 import CellDetailModal from '../components/RiskHeatmap/CellDetailModal';
@@ -14,7 +15,7 @@ const RiskHeatmapPage = () => {
   const [availableBuildings, setAvailableBuildings] = useState([]);
 
   // Load data with filtering
-  const { mlHeatmap, historicalHeatmap, metadata, loading, error } = useRiskHeatmapData(
+  const { mlHeatmap, historicalHeatmap, subsystemData, metadata, loading, error } = useRiskHeatmapData(
     selectedUniversity,
     selectedBuilding
   );
@@ -22,6 +23,7 @@ const RiskHeatmapPage = () => {
   const [selectedCellData, setSelectedCellData] = useState(null);
   const [showValues, setShowValues] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
+  const [selectedSystem, setSelectedSystem] = useState(null); // For drill-down
 
   // Additional filters
   const [systemSearch, setSystemSearch] = useState('');
@@ -45,6 +47,14 @@ const RiskHeatmapPage = () => {
 
   const toggleShowValues = () => {
     setShowValues(!showValues);
+  };
+
+  const handleSystemRowClick = (system) => {
+    setSelectedSystem(system);
+  };
+
+  const handleCloseSubsystemView = () => {
+    setSelectedSystem(null);
   };
 
   if (loading) {
@@ -154,9 +164,21 @@ const RiskHeatmapPage = () => {
               mlHeatmap={mlHeatmap}
               historicalHeatmap={historicalHeatmap}
               onCellClick={handleCellClick}
+              onRowClick={handleSystemRowClick}
               showValues={showValues}
             />
           </div>
+
+          {/* Subsystem Drill-Down Heatmap */}
+          {selectedSystem && subsystemData && (
+            <SubsystemHeatmap
+              selectedSystem={selectedSystem}
+              subsystemData={subsystemData}
+              onCellClick={handleCellClick}
+              showValues={showValues}
+              onClose={handleCloseSubsystemView}
+            />
+          )}
         </div>
 
         {/* Right: Insights Panel */}

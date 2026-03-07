@@ -11,7 +11,7 @@ const getRiskColor = (risk) => {
   return '#22c55e'; // Green - Low risk
 };
 
-const Heatmap = ({ mlHeatmap, historicalHeatmap, onCellClick, showValues }) => {
+const Heatmap = ({ mlHeatmap, historicalHeatmap, onCellClick, onRowClick, showValues }) => {
   const [hoveredCell, setHoveredCell] = useState(null);
 
   // Group data by system
@@ -92,7 +92,14 @@ const Heatmap = ({ mlHeatmap, historicalHeatmap, onCellClick, showValues }) => {
           {/* Data rows */}
           {sortedSystems.map((system) => (
             <div key={system} className="heatmap-row">
-              <div className="heatmap-row-header">{system}</div>
+              <div
+                className="heatmap-row-header"
+                onClick={() => onRowClick && onRowClick(system)}
+                style={{ cursor: onRowClick ? 'pointer' : 'default' }}
+                title={onRowClick ? 'Click to view subsystems' : ''}
+              >
+                {system}
+              </div>
               {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((month) => {
                 const cellData = mlBySystem[system]?.[month];
                 const risk = cellData?.ml_risk || 0;

@@ -67,7 +67,7 @@ export const useRiskHeatmapData = (selectedUniversity, selectedBuilding) => {
   // Filter data based on selection
   const filteredData = useMemo(() => {
     if (!buildingData.length || !universityData.length) {
-      return { mlHeatmap: [], historicalHeatmap: [], metadata: null };
+      return { mlHeatmap: [], historicalHeatmap: [], metadata: null, subsystemData: [] };
     }
 
     let data;
@@ -82,31 +82,66 @@ export const useRiskHeatmapData = (selectedUniversity, selectedBuilding) => {
       );
     }
 
-    // Format data for Heatmap component (expects SystemDescription, MonthNum, ml_risk)
-    const mlHeatmap = data.map(row => ({
-      SystemDescription: row.SubsystemDescription,  // Use subsystem as system
+    // Keep subsystem-level data for drill-down
+    const subsystemData = data.map(row => ({
+      SystemDescription: row.SystemDescription,
+      SubsystemDescription: row.SubsystemDescription,
       MonthNum: row.MonthNum,
       ml_risk: row.ml_risk,
+      hist_asset_rate: row.hist_asset_rate,
+      hist_shock_rate: row.hist_shock_rate,
       BuildingName: row.BuildingName,
       coverage: row.coverage
     }));
 
-    const historicalHeatmap = data.map(row => ({
-      SystemDescription: row.SubsystemDescription,
-      MonthNum: row.MonthNum,
-      hist_asset_rate: row.hist_asset_rate,
-      hist_shock_rate: row.hist_shock_rate
+    // Aggregate subsystems to system level for main heatmap
+    const systemAggregation = {};
+    data.forEach(row => {
+      const key = `${row.SystemDescription}_${row.MonthNum}`;
+      if (!systemAggregation[key]) {
+        systemAggregation[key] = {
+          SystemDescription: row.SystemDescription,
+          MonthNum: row.MonthNum,
+          ml_risk_sum: 0,
+          ml_risk_count: 0,
+          hist_asset_sum: 0,
+          hist_shock_sum: 0,
+          coverage_sum: 0
+        };
+      }
+      systemAggregation[key].ml_risk_sum += row.ml_risk || 0;
+      systemAggregation[key].ml_risk_count += 1;
+      systemAggregation[key].hist_asset_sum += row.hist_asset_rate || 0;
+      systemAggregation[key].hist_shock_sum += row.hist_shock_rate || 0;
+      systemAggregation[key].coverage_sum += row.coverage || 0;
+    });
+
+    // Format system-level data for main Heatmap component
+    const mlHeatmap = Object.values(systemAggregation).map(agg => ({
+      SystemDescription: agg.SystemDescription,
+      MonthNum: agg.MonthNum,
+      ml_risk: agg.ml_risk_sum / agg.ml_risk_count,
+      coverage: agg.coverage_sum
+    }));
+
+    const historicalHeatmap = Object.values(systemAggregation).map(agg => ({
+      SystemDescription: agg.SystemDescription,
+      MonthNum: agg.MonthNum,
+      hist_asset_rate: agg.hist_asset_sum / agg.ml_risk_count,
+      hist_shock_rate: agg.hist_shock_sum / agg.ml_risk_count
     }));
 
     console.log('Filtered data:', data.length, 'rows');
-    console.log('ML Heatmap:', mlHeatmap.length, 'rows');
+    console.log('System-level Heatmap:', mlHeatmap.length, 'rows');
+    console.log('Subsystem-level data:', subsystemData.length, 'rows');
     if (mlHeatmap.length > 0) {
-      console.log('Sample ML row:', mlHeatmap[0]);
+      console.log('Sample system row:', mlHeatmap[0]);
     }
 
     return {
       mlHeatmap,
       historicalHeatmap,
+      subsystemData,  // New: subsystem-level data for drill-down
       metadata
     };
   }, [buildingData, universityData, metadata, selectedUniversity, selectedBuilding]);
@@ -131,18 +166,45 @@ const generateMockBuildingData = () => {
   const data = [];
   let seed = 12345;
 
+  // System-to-Subsystem mapping (from FMUCD.csv schema)
+  const subsystemToSystem = {
+    'Lighting and Branch Wiring': 'Electrical',
+    'Communications & Security': 'Electrical',
+    'Electrical Service & Distribution': 'Electrical',
+    'Distribution Systems': 'HVAC',
+    'Terminal & Package Units': 'HVAC',
+    'Heat Generation Systems': 'HVAC',
+    'Controls and Instrumentation': 'HVAC',
+    'Cooling Generation Systems': 'HVAC',
+    'Sprinklers': 'Fire Protection',
+    'Standpipes': 'Fire Protection',
+    'Plumbing Fixtures': 'Plumbing',
+    'Domestic Water Distribution': 'Plumbing',
+    'Sanitary Waste': 'Plumbing',
+    'Rain Water Drainage': 'Plumbing',
+    'Interior Doors': 'Interior Construction',
+    'Interior Windows': 'Interior Construction',
+    'Wall Finishes': 'Interior Finishes',
+    'Floor Finishes': 'Interior Finishes',
+    'Ceiling Finishes': 'Interior Finishes',
+    'Commercial Equipment': 'Equipment'
+  };
+
   // Using real subsystems from the pipeline
   const subsystems = [
     'Lighting and Branch Wiring',
-    'Distribution Systems',
-    'Sprinklers',
-    'Terminal & Package Units',
-    'Plumbing Fixtures',
+    'Electrical Service & Distribution',
     'Communications & Security',
-    'Interior Doors',
+    'Distribution Systems',
+    'Terminal & Package Units',
     'Heat Generation Systems',
+    'Controls and Instrumentation',
+    'Sprinklers',
+    'Plumbing Fixtures',
     'Domestic Water Distribution',
-    'Controls and Instrumentation'
+    'Interior Doors',
+    'Wall Finishes',
+    'Ceiling Finishes'
   ];
 
   const universities = [10, 11];
@@ -183,6 +245,7 @@ const generateMockBuildingData = () => {
             UniversityID: uni,
             BuildingID: building.id,
             BuildingName: building.name,
+            SystemDescription: subsystemToSystem[subsystem] || 'Other',
             SubsystemDescription: subsystem,
             MonthNum: month,
             ml_risk: Math.min(0.95, baseRisk + (seededRandom(seed++) - 0.5) * 0.1),
@@ -202,20 +265,45 @@ const generateMockUniversityData = () => {
   const data = [];
   let seed = 54321;
 
+  // System-to-Subsystem mapping (same as building level)
+  const subsystemToSystem = {
+    'Lighting and Branch Wiring': 'Electrical',
+    'Communications & Security': 'Electrical',
+    'Electrical Service & Distribution': 'Electrical',
+    'Distribution Systems': 'HVAC',
+    'Terminal & Package Units': 'HVAC',
+    'Heat Generation Systems': 'HVAC',
+    'Controls and Instrumentation': 'HVAC',
+    'Cooling Generation Systems': 'HVAC',
+    'Sprinklers': 'Fire Protection',
+    'Standpipes': 'Fire Protection',
+    'Plumbing Fixtures': 'Plumbing',
+    'Domestic Water Distribution': 'Plumbing',
+    'Sanitary Waste': 'Plumbing',
+    'Rain Water Drainage': 'Plumbing',
+    'Interior Doors': 'Interior Construction',
+    'Interior Windows': 'Interior Construction',
+    'Wall Finishes': 'Interior Finishes',
+    'Floor Finishes': 'Interior Finishes',
+    'Ceiling Finishes': 'Interior Finishes',
+    'Commercial Equipment': 'Equipment',
+    'Exterior Doors': 'Exterior Enclosure'
+  };
+
   const subsystems = [
     'Lighting and Branch Wiring',
-    'Distribution Systems',
-    'Sprinklers',
-    'Terminal & Package Units',
-    'Plumbing Fixtures',
+    'Electrical Service & Distribution',
     'Communications & Security',
-    'Interior Doors',
+    'Distribution Systems',
+    'Terminal & Package Units',
     'Heat Generation Systems',
-    'Domestic Water Distribution',
     'Controls and Instrumentation',
+    'Sprinklers',
+    'Plumbing Fixtures',
+    'Domestic Water Distribution',
+    'Interior Doors',
     'Commercial Equipment',
     'Ceiling Finishes',
-    'Electrical Service & Distribution',
     'Exterior Doors'
   ];
 
@@ -238,6 +326,7 @@ const generateMockUniversityData = () => {
 
         data.push({
           UniversityID: uni,
+          SystemDescription: subsystemToSystem[subsystem] || 'Other',
           SubsystemDescription: subsystem,
           MonthNum: month,
           ml_risk: Math.min(0.95, baseRisk + (seededRandom(seed++) - 0.5) * 0.08),
