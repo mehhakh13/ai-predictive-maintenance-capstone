@@ -24,14 +24,14 @@ def create_building_level_heatmap(df, min_coverage=10):
     Create building-level heatmap for dropdown filtering.
 
     Aggregation:
-    - Group by (UniversityID, BuildingID, SystemDescription, month)
+    - Group by (UniversityID, BuildingID, BuildingName, SubsystemDescription, month)
     - ml_risk = mean(risk_prob_asset)
     - hist_asset_rate = mean(UPM_asset_event)
     - hist_shock_rate = mean(UPM_shock_event)
     - coverage = count of rows
 
     Output columns:
-    - UniversityID, BuildingID, SystemDescription, MonthNum,
+    - UniversityID, BuildingID, BuildingName, SubsystemDescription, MonthNum,
       ml_risk, hist_asset_rate, hist_shock_rate, coverage
     """
     print("\n  Creating building-level heatmap...")
@@ -39,16 +39,16 @@ def create_building_level_heatmap(df, min_coverage=10):
     # Create MonthNum (1-12)
     df['MonthNum'] = df['month']
 
-    # Group by University, Building, System, and MonthNum
-    building_agg = df.groupby(['UniversityID', 'BuildingID', 'SystemDescription', 'MonthNum']).agg({
+    # Group by University, Building, BuildingName, Subsystem, and MonthNum
+    building_agg = df.groupby(['UniversityID', 'BuildingID', 'BuildingName', 'SubsystemDescription', 'MonthNum']).agg({
         'risk_prob_asset': 'mean',
         'UPM_asset_event': 'mean',
         'UPM_shock_event': 'mean',
-        'UniversityID': 'count',  # Count as proxy for coverage
+        'month': 'count',  # Count as proxy for coverage
     }).reset_index()
 
     building_agg.columns = [
-        'UniversityID', 'BuildingID', 'SystemDescription', 'MonthNum',
+        'UniversityID', 'BuildingID', 'BuildingName', 'SubsystemDescription', 'MonthNum',
         'ml_risk', 'hist_asset_rate', 'hist_shock_rate', 'coverage'
     ]
 
@@ -60,7 +60,8 @@ def create_building_level_heatmap(df, min_coverage=10):
     print(f"    After filter (coverage ≥{min_coverage}): {len(building_agg):,} rows")
     print(f"    Unique universities: {building_agg['UniversityID'].nunique()}")
     print(f"    Unique buildings: {building_agg['BuildingID'].nunique()}")
-    print(f"    Unique systems: {building_agg['SystemDescription'].nunique()}")
+    print(f"    Unique building names: {building_agg['BuildingName'].nunique()}")
+    print(f"    Unique subsystems: {building_agg['SubsystemDescription'].nunique()}")
 
     return building_agg
 
@@ -70,7 +71,7 @@ def create_university_level_heatmap(df, min_coverage=10):
     Create university-level heatmap for "All Buildings" view.
 
     Aggregation:
-    - Group by (UniversityID, SystemDescription, month)
+    - Group by (UniversityID, SubsystemDescription, month)
     - Average across all buildings in the university
     - ml_risk = mean(risk_prob_asset)
     - hist_asset_rate = mean(UPM_asset_event)
@@ -78,7 +79,7 @@ def create_university_level_heatmap(df, min_coverage=10):
     - coverage = count of rows
 
     Output columns:
-    - UniversityID, SystemDescription, MonthNum,
+    - UniversityID, SubsystemDescription, MonthNum,
       ml_risk, hist_asset_rate, hist_shock_rate, coverage
     """
     print("\n  Creating university-level heatmap (All Buildings aggregation)...")
@@ -86,16 +87,16 @@ def create_university_level_heatmap(df, min_coverage=10):
     # Create MonthNum (1-12)
     df['MonthNum'] = df['month']
 
-    # Group by University, System, and MonthNum
-    uni_agg = df.groupby(['UniversityID', 'SystemDescription', 'MonthNum']).agg({
+    # Group by University, Subsystem, and MonthNum
+    uni_agg = df.groupby(['UniversityID', 'SubsystemDescription', 'MonthNum']).agg({
         'risk_prob_asset': 'mean',
         'UPM_asset_event': 'mean',
         'UPM_shock_event': 'mean',
-        'UniversityID': 'count',  # Count as proxy for coverage
+        'month': 'count',  # Count as proxy for coverage
     }).reset_index()
 
     uni_agg.columns = [
-        'UniversityID', 'SystemDescription', 'MonthNum',
+        'UniversityID', 'SubsystemDescription', 'MonthNum',
         'ml_risk', 'hist_asset_rate', 'hist_shock_rate', 'coverage'
     ]
 
@@ -106,7 +107,7 @@ def create_university_level_heatmap(df, min_coverage=10):
 
     print(f"    After filter (coverage ≥{min_coverage}): {len(uni_agg):,} rows")
     print(f"    Unique universities: {uni_agg['UniversityID'].nunique()}")
-    print(f"    Unique systems: {uni_agg['SystemDescription'].nunique()}")
+    print(f"    Unique subsystems: {uni_agg['SubsystemDescription'].nunique()}")
 
     return uni_agg
 
@@ -116,26 +117,35 @@ def create_metadata(building_df):
     Create metadata for frontend dropdowns.
 
     Returns:
-    - Dictionary with universities and their buildings
+    - Dictionary with universities, buildings, and building names
     """
     print("\n  Creating metadata for dropdowns...")
 
     metadata = {
         'universities': [],
-        'buildings_by_university': {}
+        'buildings_by_university': {},
+        'building_names': {}  # BuildingID -> BuildingName mapping
     }
 
     # Get unique universities
     universities = sorted(building_df['UniversityID'].unique())
     metadata['universities'] = [int(u) for u in universities]
 
-    # Get buildings for each university
+    # Get buildings and building names for each university
     for uni in universities:
-        buildings = sorted(building_df[building_df['UniversityID'] == uni]['BuildingID'].unique())
-        metadata['buildings_by_university'][int(uni)] = [int(b) for b in buildings]
+        uni_buildings = building_df[building_df['UniversityID'] == uni][['BuildingID', 'BuildingName']].drop_duplicates()
+
+        # Store building IDs
+        buildings = sorted(uni_buildings['BuildingID'].unique())
+        metadata['buildings_by_university'][int(uni)] = [str(b) for b in buildings]
+
+        # Store BuildingID -> BuildingName mapping
+        for _, row in uni_buildings.iterrows():
+            metadata['building_names'][str(row['BuildingID'])] = str(row['BuildingName'])
 
     print(f"    Universities: {metadata['universities']}")
     print(f"    Total buildings: {sum(len(v) for v in metadata['buildings_by_university'].values())}")
+    print(f"    Total building names: {len(metadata['building_names'])}")
 
     return metadata
 
@@ -153,7 +163,8 @@ def print_heatmap_summary(building_df, uni_df):
     print(f"  Total rows: {len(building_df):,}")
     print(f"  Unique universities: {building_df['UniversityID'].nunique()}")
     print(f"  Unique buildings: {building_df['BuildingID'].nunique()}")
-    print(f"  Unique systems: {building_df['SystemDescription'].nunique()}")
+    print(f"  Unique building names: {building_df['BuildingName'].nunique()}")
+    print(f"  Unique subsystems: {building_df['SubsystemDescription'].nunique()}")
     print(f"  Month range: {building_df['MonthNum'].min()} - {building_df['MonthNum'].max()}")
 
     print(f"\n  ML Risk distribution:")
@@ -163,16 +174,16 @@ def print_heatmap_summary(building_df, uni_df):
     print(f"    75th:   {building_df['ml_risk'].quantile(0.75):.4f}")
     print(f"    Max:    {building_df['ml_risk'].max():.4f}")
 
-    print(f"\n  Top 5 riskiest (Uni, Bldg, System, Month):")
+    print(f"\n  Top 5 riskiest (Uni, Bldg, Subsystem, Month):")
     top_risk = building_df.nlargest(5, 'ml_risk')
     for idx, row in top_risk.iterrows():
-        print(f"    Uni {row['UniversityID']} Bldg {row['BuildingID']} {row['SystemDescription']:30s} Month {row['MonthNum']:2.0f}  Risk: {row['ml_risk']:.4f}")
+        print(f"    Uni {row['UniversityID']} {row['BuildingName'][:20]:20s} {row['SubsystemDescription'][:30]:30s} Month {row['MonthNum']:2.0f}  Risk: {row['ml_risk']:.4f}")
 
     # University-Level Heatmap
     print("\n[UNIVERSITY-LEVEL HEATMAP (All Buildings)]")
     print(f"  Total rows: {len(uni_df):,}")
     print(f"  Unique universities: {uni_df['UniversityID'].nunique()}")
-    print(f"  Unique systems: {uni_df['SystemDescription'].nunique()}")
+    print(f"  Unique subsystems: {uni_df['SubsystemDescription'].nunique()}")
     print(f"  Month range: {uni_df['MonthNum'].min()} - {uni_df['MonthNum'].max()}")
 
     print(f"\n  ML Risk distribution:")
@@ -199,14 +210,14 @@ def validate_heatmaps(building_df, uni_df):
     # Check 1: Schema validation
     print(f"\n✓ Schema Validation:")
 
-    building_expected_cols = ['UniversityID', 'BuildingID', 'SystemDescription', 'MonthNum',
+    building_expected_cols = ['UniversityID', 'BuildingID', 'BuildingName', 'SubsystemDescription', 'MonthNum',
                               'ml_risk', 'hist_asset_rate', 'hist_shock_rate', 'coverage']
     building_valid = all(col in building_df.columns for col in building_expected_cols)
     print(f"  Building-level heatmap columns: {building_valid}")
     print(f"    Expected: {building_expected_cols}")
     print(f"    Actual: {list(building_df.columns)}")
 
-    uni_expected_cols = ['UniversityID', 'SystemDescription', 'MonthNum',
+    uni_expected_cols = ['UniversityID', 'SubsystemDescription', 'MonthNum',
                         'ml_risk', 'hist_asset_rate', 'hist_shock_rate', 'coverage']
     uni_valid = all(col in uni_df.columns for col in uni_expected_cols)
     print(f"  University-level heatmap columns: {uni_valid}")

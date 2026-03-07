@@ -96,11 +96,13 @@ const RiskHeatmapPage = () => {
             <select
               className="filter-select"
               value={selectedBuilding}
-              onChange={(e) => setSelectedBuilding(e.target.value === 'all' ? 'all' : Number(e.target.value))}
+              onChange={(e) => setSelectedBuilding(e.target.value === 'all' ? 'all' : e.target.value)}
             >
               <option value="all">All Buildings</option>
               {availableBuildings.map(bldg => (
-                <option key={bldg} value={bldg}>Building {bldg}</option>
+                <option key={bldg} value={bldg}>
+                  {metadata?.building_names?.[bldg] || `Building ${bldg}`}
+                </option>
               ))}
             </select>
           </div>
@@ -127,7 +129,11 @@ const RiskHeatmapPage = () => {
 
       {/* Selection Info */}
       <div style={{ padding: '0 1rem', marginTop: '0.5rem', fontSize: '0.9rem', color: '#666' }}>
-        Showing data for: University {selectedUniversity} - {selectedBuilding === 'all' ? 'All Buildings' : `Building ${selectedBuilding}`}
+        Showing data for: University {selectedUniversity} - {
+          selectedBuilding === 'all'
+            ? 'All Buildings'
+            : (metadata?.building_names?.[selectedBuilding] || `Building ${selectedBuilding}`)
+        }
       </div>
 
       {/* KPI Cards */}
