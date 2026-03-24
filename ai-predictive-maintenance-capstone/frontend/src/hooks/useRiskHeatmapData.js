@@ -207,7 +207,7 @@ const generateMockBuildingData = () => {
     'Ceiling Finishes'
   ];
 
-  const universities = [10, 11];
+  const universities = [10, 11, 12];
   const buildings = {
     10: [
       { id: '0009', name: 'STUDENT UNION PARKING GARAGE' },
@@ -221,6 +221,12 @@ const generateMockBuildingData = () => {
       { id: '0002', name: 'Research Center' },
       { id: '0003', name: 'Sports Complex' },
       { id: '0004', name: 'Dining Hall' }
+    ],
+    12: [
+      { id: '0005', name: 'Medical Center' },
+      { id: '0006', name: 'Arts Building' },
+      { id: '0007', name: 'Technology Lab' },
+      { id: '0008', name: 'Athletics Facility' }
     ]
   };
 
@@ -230,15 +236,19 @@ const generateMockBuildingData = () => {
         for (let month = 1; month <= 12; month++) {
           let baseRisk = 0.15;
 
-          // Seasonal patterns
+          // Seasonal patterns with higher risk scores
           if (subsystem.includes('Heat Generation')) {
-            baseRisk = [12, 1, 2].includes(month) ? 0.65 : 0.25;
+            baseRisk = [12, 1, 2].includes(month) ? 0.75 : 0.30;
           } else if (subsystem.includes('Terminal & Package')) {
-            baseRisk = [6, 7, 8].includes(month) ? 0.55 : 0.30;
+            baseRisk = [6, 7, 8].includes(month) ? 0.70 : 0.35;
           } else if (subsystem.includes('Plumbing') || subsystem.includes('Water')) {
-            baseRisk = [12, 1, 2].includes(month) ? 0.45 : 0.25;
+            baseRisk = [12, 1, 2].includes(month) ? 0.55 : 0.30;
+          } else if (subsystem.includes('Controls and Instrumentation')) {
+            baseRisk = [10, 11, 12].includes(month) ? 0.65 : 0.35;
+          } else if (subsystem.includes('Cooling Generation')) {
+            baseRisk = [6, 7, 8].includes(month) ? 0.68 : 0.28;
           } else {
-            baseRisk = 0.15 + seededRandom(seed++) * 0.25;
+            baseRisk = 0.20 + seededRandom(seed++) * 0.35;
           }
 
           data.push({
@@ -307,7 +317,7 @@ const generateMockUniversityData = () => {
     'Exterior Doors'
   ];
 
-  const universities = [10, 11];
+  const universities = [10, 11, 12];
 
   universities.forEach(uni => {
     subsystems.forEach(subsystem => {
@@ -315,13 +325,17 @@ const generateMockUniversityData = () => {
         let baseRisk = 0.15;
 
         if (subsystem.includes('Heat Generation')) {
-          baseRisk = [12, 1, 2].includes(month) ? 0.60 : 0.22;
+          baseRisk = [12, 1, 2].includes(month) ? 0.72 : 0.28;
         } else if (subsystem.includes('Terminal & Package')) {
-          baseRisk = [6, 7, 8].includes(month) ? 0.50 : 0.28;
+          baseRisk = [6, 7, 8].includes(month) ? 0.65 : 0.32;
         } else if (subsystem.includes('Plumbing') || subsystem.includes('Water')) {
-          baseRisk = [12, 1, 2].includes(month) ? 0.40 : 0.22;
+          baseRisk = [12, 1, 2].includes(month) ? 0.50 : 0.28;
+        } else if (subsystem.includes('Controls and Instrumentation')) {
+          baseRisk = [10, 11, 12].includes(month) ? 0.68 : 0.38;
+        } else if (subsystem.includes('Cooling Generation')) {
+          baseRisk = [6, 7, 8].includes(month) ? 0.70 : 0.30;
         } else {
-          baseRisk = 0.15 + seededRandom(seed++) * 0.20;
+          baseRisk = 0.18 + seededRandom(seed++) * 0.30;
         }
 
         data.push({
@@ -343,10 +357,11 @@ const generateMockUniversityData = () => {
 
 const generateMockMetadata = () => {
   return {
-    universities: [10, 11],
+    universities: [10, 11, 12],
     buildings_by_university: {
       10: ['0009', '0099', '0106', '0113', '0132'],
-      11: ['0001', '0002', '0003', '0004']
+      11: ['0001', '0002', '0003', '0004'],
+      12: ['0005', '0006', '0007', '0008']
     },
     building_names: {
       '0009': 'STUDENT UNION PARKING GARAGE',
@@ -357,7 +372,11 @@ const generateMockMetadata = () => {
       '0001': 'Administration Building',
       '0002': 'Research Center',
       '0003': 'Sports Complex',
-      '0004': 'Dining Hall'
+      '0004': 'Dining Hall',
+      '0005': 'Medical Center',
+      '0006': 'Arts Building',
+      '0007': 'Technology Lab',
+      '0008': 'Athletics Facility'
     }
   };
 };
