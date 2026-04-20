@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { LayoutDashboard, TrendingUp, AlertCircle, BarChart3, DollarSign } from 'lucide-react';
+import { LayoutDashboard, TrendingUp, AlertCircle, BarChart3, DollarSign, Bug } from 'lucide-react';
 
 const HomePage = () => {
   const dashboards = [
@@ -18,6 +18,14 @@ const HomePage = () => {
       icon: DollarSign,
       path: '/cost-analysis',
       color: '#10b981',
+      featured: true
+    },
+    {
+      title: 'Defect Intelligence',
+      description: 'Analyze failure patterns and root causes. Identify most common defects and their cost impact.',
+      icon: Bug,
+      path: '/defect-intelligence',
+      color: '#ef4444',
       featured: true
     },
     {

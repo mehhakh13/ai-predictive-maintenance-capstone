@@ -3,6 +3,7 @@ import Navbar from './components/Navbar';
 import HomePage from './pages/HomePage';
 import RiskHeatmapPage from './pages/RiskHeatmapPage';
 import CostAnalysisPage from './pages/CostAnalysisPage';
+import DefectIntelligence from './pages/DefectIntelligence';
 import Dashboard from './pages/Dashboard';
 import Prediction from './pages/Prediction';
 import RiskRanking from './pages/RiskRanking';
@@ -19,6 +20,7 @@ function App() {
             <Route path="/" element={<HomePage />} />
             <Route path="/risk-heatmap" element={<RiskHeatmapPage />} />
             <Route path="/cost-analysis" element={<CostAnalysisPage />} />
+            <Route path="/defect-intelligence" element={<DefectIntelligence />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/prediction" element={<Prediction />} />
             <Route path="/risk-ranking" element={<RiskRanking />} />
