@@ -18,8 +18,9 @@ const generateMockCostData = () => {
   const priorities = ['Low', 'Medium', 'High', 'Critical'];
 
   const data = [];
-  const startDate = new Date('2023-01-01');
-  const endDate = new Date('2024-12-31');
+  const endDate = new Date();
+  const startDate = new Date();
+  startDate.setFullYear(startDate.getFullYear() - 2);
 
   // Generate 500-800 work orders
   const numOrders = 500 + Math.floor(Math.random() * 300);
