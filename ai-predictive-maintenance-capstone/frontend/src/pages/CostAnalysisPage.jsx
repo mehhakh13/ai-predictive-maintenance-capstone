@@ -11,19 +11,12 @@ import OutlierTable from '../components/CostAnalysis/OutlierTable';
 /**
  * CostAnalysisPage Component
  * Main dashboard for Maintenance Cost Analysis
- * Features:
- * - PPM vs UPM cost comparison
- * - System-level cost breakdown
- * - Monthly cost trends
- * - Top cost contributors
- * - Cost distribution visualization
- * - Outlier detection and analysis
  */
 const CostAnalysisPage = () => {
-  // State for filters
+  // State for filters — defaults to "All Time" so real historical data shows
   const [filters, setFilters] = useState({
     dateRange: {
-      start: new Date(new Date().setFullYear(new Date().getFullYear() - 1)), // Last 12 months
+      start: new Date('2000-01-01'),
       end: new Date()
     },
     university: 'All',
@@ -32,42 +25,51 @@ const CostAnalysisPage = () => {
     maintenanceType: 'All'
   });
 
-  // State for UI toggles
   const [showPPMvsUPM, setShowPPMvsUPM] = useState(false);
   const [distributionView, setDistributionView] = useState('ppm-upm');
   const [showOutlierModal, setShowOutlierModal] = useState(false);
   const [showExplainThis, setShowExplainThis] = useState(false);
 
-  // Load data with current filters
   const { filteredData, loading, error, aggregations } = useCostAnalysisData(filters);
 
-  // Handle filter changes
   const handleFilterChange = (key, value) => {
-    setFilters(prev => ({
-      ...prev,
-      [key]: value
-    }));
+    setFilters(prev => ({ ...prev, [key]: value }));
   };
 
-  const handleDateRangeChange = (range) => {
-    const now = new Date();
-    let start, end = now;
+const handleDateRangeChange = (range) => {
+    const end = new Date();  // today
+    let start;
 
     switch (range) {
       case '3m':
-        start = new Date(now.setMonth(now.getMonth() - 3));
+        start = new Date();
+        start.setMonth(start.getMonth() - 3);
         break;
       case '6m':
-        start = new Date(now.setMonth(now.getMonth() - 6));
+        start = new Date();
+        start.setMonth(start.getMonth() - 6);
         break;
       case '12m':
-        start = new Date(now.setFullYear(now.getFullYear() - 1));
+        start = new Date();
+        start.setFullYear(start.getFullYear() - 1);
         break;
       case '24m':
-        start = new Date(now.setFullYear(now.getFullYear() - 2));
+        start = new Date();
+        start.setFullYear(start.getFullYear() - 2);
+        break;
+      case '5y':
+        start = new Date();
+        start.setFullYear(start.getFullYear() - 5);
+        break;
+      case '10y':
+        start = new Date();
+        start.setFullYear(start.getFullYear() - 10);
+        break;
+      case 'all':
+        start = new Date('2000-01-01');
         break;
       default:
-        start = new Date(now.setFullYear(now.getFullYear() - 1));
+        start = new Date('2000-01-01');
     }
 
     setFilters(prev => ({
@@ -76,7 +78,6 @@ const CostAnalysisPage = () => {
     }));
   };
 
-  // Get unique values for filter dropdowns
   const uniqueUniversities = useMemo(() => {
     if (!filteredData) return [];
     return ['All', ...new Set(filteredData.map(item => item.UniversityID))];
@@ -110,7 +111,6 @@ const CostAnalysisPage = () => {
 
   return (
     <div className="cost-analysis-page">
-      {/* Top Bar */}
       <div className="page-header">
         <div className="header-title-row">
           <h1 className="page-title">Maintenance Cost Analysis</h1>
@@ -140,19 +140,21 @@ const CostAnalysisPage = () => {
           </div>
         )}
 
-        {/* Filters Bar */}
         <div className="filters-bar">
           <div className="filter-group">
             <Filter size={16} />
             <select
               className="filter-select"
-              value={filters.dateRange.label || '12m'}
+              value={filters.dateRange.label || 'all'}
               onChange={(e) => handleDateRangeChange(e.target.value)}
             >
-              <option value="3m">Last 3 Months</option>
-              <option value="6m">Last 6 Months</option>
-              <option value="12m">Last 12 Months</option>
+              <option value="all">All Time</option>
+              <option value="10y">Last 10 Years</option>
+              <option value="5y">Last 5 Years</option>
               <option value="24m">Last 24 Months</option>
+              <option value="12m">Last 12 Months</option>
+              <option value="6m">Last 6 Months</option>
+              <option value="3m">Last 3 Months</option>
             </select>
           </div>
 
@@ -208,14 +210,10 @@ const CostAnalysisPage = () => {
         </div>
       </div>
 
-      {/* KPI Cards */}
       <KpiRow aggregations={aggregations} totalWorkOrders={filteredData.length} />
 
-      {/* Main Content - 2 Column Layout */}
       <div className="main-content">
-        {/* Left Column */}
         <div className="content-left">
-          {/* Cost Breakdown Chart */}
           <div className="section-card">
             <div className="section-header">
               <div>
@@ -239,7 +237,6 @@ const CostAnalysisPage = () => {
             <CostBreakdownChart data={filteredData} showPPMvsUPM={showPPMvsUPM} />
           </div>
 
-          {/* Cost Trend Chart */}
           <div className="section-card" style={{ marginTop: '1.5rem' }}>
             <div className="section-header">
               <h2 className="section-title">
@@ -252,14 +249,11 @@ const CostAnalysisPage = () => {
           </div>
         </div>
 
-        {/* Right Column */}
         <div className="content-right">
-          {/* Top Contributors */}
           <div className="section-card">
             <TopContributors data={filteredData} />
           </div>
 
-          {/* Cost Distribution */}
           <div className="section-card" style={{ marginTop: '1.5rem' }}>
             <div className="section-header">
               <div>
@@ -286,7 +280,6 @@ const CostAnalysisPage = () => {
         </div>
       </div>
 
-      {/* Bottom Section: Outlier Table */}
       <div className="bottom-section">
         <div className="section-card">
           <OutlierTable
@@ -296,7 +289,6 @@ const CostAnalysisPage = () => {
         </div>
       </div>
 
-      {/* Outlier Modal (if triggered) */}
       {showOutlierModal && (
         <OutlierTable
           data={filteredData}
