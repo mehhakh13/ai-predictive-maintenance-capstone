@@ -1,8 +1,10 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { LayoutDashboard, TrendingUp, AlertCircle, BarChart3, DollarSign } from 'lucide-react';
+import { LayoutDashboard, TrendingUp, AlertCircle, BarChart3, DollarSign, MessageCircle } from 'lucide-react';
+import ChatModal from '../components/ChatModal';
 
 const HomePage = () => {
+  const [isChatOpen, setIsChatOpen] = useState(false);
   const dashboards = [
     {
       title: 'System Risk Heatmap',
@@ -93,6 +95,20 @@ const HomePage = () => {
           </ul>
         </div>
       </div>
+
+      {/* Floating Chat Button */}
+      {!isChatOpen && (
+        <button
+          className="floating-chat-button"
+          onClick={() => setIsChatOpen(true)}
+          title="Open AI Assistant"
+        >
+          <MessageCircle size={24} />
+        </button>
+      )}
+
+      {/* Chat Modal */}
+      <ChatModal isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} />
     </div>
   );
 };
