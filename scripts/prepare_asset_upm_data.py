@@ -113,11 +113,21 @@ def main():
     print("PHASE 1: DATA PREPARATION & CLASSIFICATION")
     print("=" * 80)
 
-    # Load data
-    print("\n[1/6] Loading FMUCD_USA.parquet...")
-    df = pd.read_parquet('FMUCD_USA.parquet')
+    # Load data from FMUCD.csv (has BuildingName and SubsystemDescription)
+    print("\n[1/6] Loading FMUCD.csv...")
+    df = pd.read_csv('FMUCD.csv', low_memory=False)
     print(f"  Loaded {len(df):,} work orders")
     print(f"  Original columns: {len(df.columns)}")
+
+    # Filter to UniversityID in {10, 11, 12} for focused analysis
+    print("\n  Filtering to UniversityID in {10, 11, 12}...")
+    df = df[df['UniversityID'].isin([10, 11, 12])]
+    print(f"  After filter: {len(df):,} work orders")
+    print(f"  Universities: {sorted(df['UniversityID'].unique())}")
+    print(f"  Buildings: {df['BuildingID'].nunique()}")
+    print(f"  Building Names: {df['BuildingName'].nunique()}")
+    print(f"  Systems: {df['SystemDescription'].nunique()}")
+    print(f"  Subsystems: {df['SubsystemDescription'].nunique()}")
 
     # Rename columns for easier handling
     print("  Renaming columns...")
@@ -133,6 +143,16 @@ def main():
         'Snow(mm)': 'Snow',
     }, inplace=True)
     print(f"  Renamed columns: {list(df.columns)}")
+
+    # Convert numeric columns to proper types (CSV may have them as strings)
+    print("  Converting numeric columns to proper types...")
+    numeric_cols = ['BuiltYear', 'Size', 'FCI', 'DMC', 'CRV',
+                    'MinTemp', 'MaxTemp', 'Humidity', 'Precipitation', 'Snow',
+                    'WOPriority', 'WODuration']
+    for col in numeric_cols:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors='coerce')
+    print(f"    Converted {len(numeric_cols)} columns to numeric")
 
     # Parse dates and create time features
     print("\n[2/6] Parsing dates and creating time features...")
@@ -178,8 +198,9 @@ def main():
     # Create monthly aggregations
     print("\n[5/6] Creating monthly aggregations by entity...")
 
-    # Define grouping keys
-    entity_cols = ['UniversityID', 'BuildingID', 'SystemDescription', 'year', 'month', 'month_date']
+    # IMPORTANT: Group by BuildingID (NOT BuildingName) to avoid data loss
+    # BuildingName will be added later from lookup table
+    entity_cols = ['UniversityID', 'BuildingID', 'SubsystemDescription', 'year', 'month', 'month_date']
 
     # Create event indicators
     df['is_upm'] = (df['PPMorUPM'] == 'UPM').astype(int)
@@ -200,6 +221,8 @@ def main():
         'FCI': 'first',
         'DMC': 'first',
         'CRV': 'first',
+        'SystemDescription': 'first',  # Keep system for reference
+        'BuildingName': 'first',  # Get BuildingName (will be null for some, filled later)
 
         # Weather (monthly means)
         'MinTemp': 'mean',
@@ -223,15 +246,15 @@ def main():
     }, inplace=True)
 
     print(f"  Initial aggregated rows: {len(monthly):,}")
-    print(f"  Unique entities: {monthly.groupby(['UniversityID', 'BuildingID', 'SystemDescription']).ngroups:,}")
+    print(f"  Unique entities: {monthly.groupby(['UniversityID', 'BuildingID', 'SubsystemDescription']).ngroups:,}")
 
     # Smart monthly grid generation
     print("\n[6/6] Generating smart monthly grids (only for active periods)...")
 
     # Get first/last appearance per entity
-    entity_group_cols = ['UniversityID', 'BuildingID', 'SystemDescription']
+    entity_group_cols = ['UniversityID', 'BuildingID', 'SubsystemDescription']
     entity_ranges = monthly.groupby(entity_group_cols)['month_date'].agg(['min', 'max']).reset_index()
-    entity_ranges.columns = ['UniversityID', 'BuildingID', 'SystemDescription', 'first_month', 'last_month']
+    entity_ranges.columns = ['UniversityID', 'BuildingID', 'SubsystemDescription', 'first_month', 'last_month']
 
     print(f"  Generating complete monthly grids for {len(entity_ranges):,} entities...")
 
@@ -248,7 +271,7 @@ def main():
         entity_grid = pd.DataFrame({
             'UniversityID': row['UniversityID'],
             'BuildingID': row['BuildingID'],
-            'SystemDescription': row['SystemDescription'],
+            'SubsystemDescription': row['SubsystemDescription'],
             'month_date': months,
         })
 
@@ -265,7 +288,7 @@ def main():
 
     # Merge with aggregated data (zero-fill missing months)
     print("  Merging with aggregated data (zero-filling missing months)...")
-    merge_cols = ['UniversityID', 'BuildingID', 'SystemDescription', 'year', 'month', 'month_date']
+    merge_cols = ['UniversityID', 'BuildingID', 'SubsystemDescription', 'year', 'month', 'month_date']
     final = complete_grid.merge(monthly, on=merge_cols, how='left')
 
     # Fill event counts with 0 (missing months = no events)
@@ -273,10 +296,20 @@ def main():
     final[event_cols] = final[event_cols].fillna(0).astype(int)
 
     # Forward fill building context (these don't change)
-    building_cols = ['BuiltYear', 'Size', 'Type', 'FCI', 'DMC', 'CRV']
+    building_cols = ['BuiltYear', 'Size', 'Type', 'FCI', 'DMC', 'CRV', 'SystemDescription', 'BuildingName']
     for col in building_cols:
         if col in final.columns:
             final[col] = final.groupby(entity_group_cols)[col].ffill().bfill()
+
+    # Fill remaining null BuildingNames with placeholder
+    print("  Filling null BuildingNames with placeholder...")
+    null_count = final['BuildingName'].isna().sum()
+    if null_count > 0:
+        print(f"    Found {null_count:,} null BuildingNames - filling with 'Building [ID]'")
+        final['BuildingName'] = final.apply(
+            lambda row: f"Building {row['BuildingID']}" if pd.isna(row['BuildingName']) else row['BuildingName'],
+            axis=1
+        )
 
     # Interpolate weather data (linear interpolation within entity)
     weather_cols = ['MinTemp', 'MaxTemp', 'Humidity', 'Precipitation', 'Snow']
@@ -316,10 +349,13 @@ def main():
 
     # Check 3: Null checks
     print(f"\n✓ Null values in critical columns:")
-    critical_cols = ['UniversityID', 'BuildingID', 'SystemDescription', 'year', 'month', 'month_date'] + event_cols
+    critical_cols = ['UniversityID', 'BuildingID', 'SubsystemDescription', 'year', 'month', 'month_date'] + event_cols
     for col in critical_cols:
         null_count = final[col].isna().sum()
         print(f"  {col}: {null_count:,} nulls")
+
+    # Check BuildingName separately (can have nulls)
+    print(f"  BuildingName: {final['BuildingName'].isna().sum():,} nulls (filled with placeholder)")
 
     # Check 4: Event distribution
     print(f"\n✓ Event distribution:")

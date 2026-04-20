@@ -31,14 +31,15 @@ def get_feature_columns(df):
     Define feature columns for modeling.
 
     Excludes:
-    - Entity identifiers (UniversityID, BuildingID, SystemDescription)
+    - Entity identifiers (UniversityID, BuildingID, BuildingName, SystemDescription, SubsystemDescription)
     - Time identifiers (year, month, month_date)
     - Target and event counts
-    - Intermediate columns (system_category, Type)
+    - Intermediate columns (subsystem_category, Type)
     """
     exclude_cols = [
         # Entity identifiers
-        'UniversityID', 'BuildingID', 'SystemDescription',
+        'UniversityID', 'BuildingID', 'BuildingName',
+        'SystemDescription', 'SubsystemDescription',
 
         # Time identifiers
         'year', 'month', 'month_date',
@@ -47,7 +48,7 @@ def get_feature_columns(df):
         'target_asset_upm', 'UPM_total_event', 'UPM_asset_event', 'UPM_shock_event',
 
         # Intermediate columns
-        'system_category', 'Type',
+        'subsystem_category', 'Type',
     ]
 
     feature_cols = [col for col in df.columns if col not in exclude_cols]

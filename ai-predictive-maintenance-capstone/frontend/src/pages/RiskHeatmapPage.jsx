@@ -1,25 +1,41 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRiskHeatmapData } from '../hooks/useRiskHeatmapData';
 import KpiRow from '../components/RiskHeatmap/KpiRow';
 import Heatmap from '../components/RiskHeatmap/Heatmap';
+import SubsystemHeatmap from '../components/RiskHeatmap/SubsystemHeatmap';
 import InsightsPanel from '../components/RiskHeatmap/InsightsPanel';
 import RiskCharts from '../components/RiskHeatmap/RiskCharts';
 import CellDetailModal from '../components/RiskHeatmap/CellDetailModal';
-import { Filter, Eye, EyeOff } from 'lucide-react';
+import { Filter, Eye, EyeOff, Building2, School } from 'lucide-react';
 
 const RiskHeatmapPage = () => {
-  const { mlHeatmap, historicalHeatmap, loading, error } = useRiskHeatmapData();
+  // University and Building selection state
+  const [selectedUniversity, setSelectedUniversity] = useState(10); // Default to University 10
+  const [selectedBuilding, setSelectedBuilding] = useState('all'); // Default to "All Buildings"
+  const [availableBuildings, setAvailableBuildings] = useState([]);
+
+  // Load data with filtering
+  const { mlHeatmap, historicalHeatmap, subsystemData, metadata, loading, error } = useRiskHeatmapData(
+    selectedUniversity,
+    selectedBuilding
+  );
+
   const [selectedCellData, setSelectedCellData] = useState(null);
   const [showValues, setShowValues] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
+  const [selectedSystem, setSelectedSystem] = useState(null); // For drill-down
 
-  // Filters (UI only for now)
-  const [filters, setFilters] = useState({
-    campus: 'All',
-    building: 'All',
-    year: '2024',
-    systemSearch: ''
-  });
+  // Additional filters
+  const [systemSearch, setSystemSearch] = useState('');
+
+  // Update available buildings when university changes
+  useEffect(() => {
+    if (metadata && selectedUniversity) {
+      const buildings = metadata.buildings_by_university[selectedUniversity] || [];
+      setAvailableBuildings(buildings);
+      setSelectedBuilding('all'); // Reset to "All Buildings" when university changes
+    }
+  }, [selectedUniversity, metadata]);
 
   const handleCellClick = (cellData) => {
     setSelectedCellData(cellData);
@@ -31,6 +47,14 @@ const RiskHeatmapPage = () => {
 
   const toggleShowValues = () => {
     setShowValues(!showValues);
+  };
+
+  const handleSystemRowClick = (system) => {
+    setSelectedSystem(system);
+  };
+
+  const handleCloseSubsystemView = () => {
+    setSelectedSystem(null);
   };
 
   if (loading) {
@@ -62,58 +86,64 @@ const RiskHeatmapPage = () => {
 
         {/* Filters */}
         <div className="filters-bar">
+          {/* University Filter */}
           <div className="filter-group">
-            <Filter size={16} />
+            <School size={16} />
             <select
               className="filter-select"
-              value={filters.campus}
-              onChange={(e) => setFilters({ ...filters, campus: e.target.value })}
+              value={selectedUniversity || ''}
+              onChange={(e) => setSelectedUniversity(Number(e.target.value))}
             >
-              <option value="All">All Campuses</option>
-              <option value="Campus1">Campus 1</option>
-              <option value="Campus2">Campus 2</option>
+              {metadata && metadata.universities.map(uni => (
+                <option key={uni} value={uni}>University {uni}</option>
+              ))}
             </select>
           </div>
 
+          {/* Building Filter */}
           <div className="filter-group">
+            <Building2 size={16} />
             <select
               className="filter-select"
-              value={filters.building}
-              onChange={(e) => setFilters({ ...filters, building: e.target.value })}
+              value={selectedBuilding}
+              onChange={(e) => setSelectedBuilding(e.target.value === 'all' ? 'all' : e.target.value)}
             >
-              <option value="All">All Buildings</option>
-              <option value="Building1">Building 1</option>
-              <option value="Building2">Building 2</option>
+              <option value="all">All Buildings</option>
+              {availableBuildings.map(bldg => (
+                <option key={bldg} value={bldg}>
+                  {metadata?.building_names?.[bldg] || `Building ${bldg}`}
+                </option>
+              ))}
             </select>
           </div>
 
-          <div className="filter-group">
-            <select
-              className="filter-select"
-              value={filters.year}
-              onChange={(e) => setFilters({ ...filters, year: e.target.value })}
-            >
-              <option value="2024">2024</option>
-              <option value="2023">2023</option>
-              <option value="2022">2022</option>
-            </select>
-          </div>
-
+          {/* System Search */}
           <div className="filter-group search">
+            <Filter size={16} />
             <input
               type="text"
               className="filter-search"
               placeholder="Search systems..."
-              value={filters.systemSearch}
-              onChange={(e) => setFilters({ ...filters, systemSearch: e.target.value })}
+              value={systemSearch}
+              onChange={(e) => setSystemSearch(e.target.value)}
             />
           </div>
 
+          {/* Toggle Values Button */}
           <button className="toggle-values-btn" onClick={toggleShowValues}>
             {showValues ? <EyeOff size={16} /> : <Eye size={16} />}
             {showValues ? 'Hide Values' : 'Show Values'}
           </button>
         </div>
+      </div>
+
+      {/* Selection Info */}
+      <div style={{ padding: '0 1rem', marginTop: '0.5rem', fontSize: '0.9rem', color: '#666' }}>
+        Showing data for: University {selectedUniversity} - {
+          selectedBuilding === 'all'
+            ? 'All Buildings'
+            : (metadata?.building_names?.[selectedBuilding] || `Building ${selectedBuilding}`)
+        }
       </div>
 
       {/* KPI Cards */}
@@ -134,9 +164,21 @@ const RiskHeatmapPage = () => {
               mlHeatmap={mlHeatmap}
               historicalHeatmap={historicalHeatmap}
               onCellClick={handleCellClick}
+              onRowClick={handleSystemRowClick}
               showValues={showValues}
             />
           </div>
+
+          {/* Subsystem Drill-Down Heatmap */}
+          {selectedSystem && subsystemData && (
+            <SubsystemHeatmap
+              selectedSystem={selectedSystem}
+              subsystemData={subsystemData}
+              onCellClick={handleCellClick}
+              showValues={showValues}
+              onClose={handleCloseSubsystemView}
+            />
+          )}
         </div>
 
         {/* Right: Insights Panel */}

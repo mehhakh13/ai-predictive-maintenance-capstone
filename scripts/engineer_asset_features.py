@@ -34,7 +34,7 @@ def create_lag_features(df, entity_cols):
     df = df.sort_values(entity_cols + ['year', 'month']).reset_index(drop=True)
 
     # Group by entity
-    entity_group = df.groupby(entity_cols, group_keys=False)
+    entity_group = df.groupby(entity_cols, group_keys=False, sort=False)
 
     # 1-month lag (shift 1)
     print("    - asset_upm_last_1m (shift 1)")
@@ -42,25 +42,15 @@ def create_lag_features(df, entity_cols):
 
     # 3-month rolling sum (exclude current month)
     print("    - asset_upm_last_3m (rolling 3, exclude current)")
-    df['asset_upm_last_3m'] = (
-        entity_group['UPM_asset_event']
-        .rolling(window=4, min_periods=1)
-        .sum()
-        .shift(1)
-        .fillna(0)
-        .astype(int)
-    )
+    df['asset_upm_last_3m'] = entity_group['UPM_asset_event'].transform(
+        lambda x: x.rolling(window=4, min_periods=1).sum().shift(1).fillna(0)
+    ).astype(int)
 
     # 6-month rolling sum (exclude current month)
     print("    - asset_upm_last_6m (rolling 6, exclude current)")
-    df['asset_upm_last_6m'] = (
-        entity_group['UPM_asset_event']
-        .rolling(window=7, min_periods=1)
-        .sum()
-        .shift(1)
-        .fillna(0)
-        .astype(int)
-    )
+    df['asset_upm_last_6m'] = entity_group['UPM_asset_event'].transform(
+        lambda x: x.rolling(window=7, min_periods=1).sum().shift(1).fillna(0)
+    ).astype(int)
 
     # Months since last asset UPM
     print("    - months_since_asset_upm (custom calculation)")
@@ -143,30 +133,30 @@ def create_derived_features(df):
     return df
 
 
-def encode_systems(df, top_n=15):
+def encode_subsystems(df, top_n=20):
     """
-    One-hot encode top N systems, group rest as 'Other'.
+    One-hot encode top N subsystems, group rest as 'Other'.
 
-    Returns df with system_* columns added.
+    Returns df with subsystem_* columns added.
     """
-    print(f"\n  One-hot encoding top {top_n} systems...")
+    print(f"\n  One-hot encoding top {top_n} subsystems...")
 
-    # Get top N systems by occurrence
-    top_systems = df['SystemDescription'].value_counts().head(top_n).index.tolist()
-    print(f"    Top {top_n} systems: {top_systems[:5]}... (and {top_n-5} more)")
+    # Get top N subsystems by occurrence
+    top_subsystems = df['SubsystemDescription'].value_counts().head(top_n).index.tolist()
+    print(f"    Top {top_n} subsystems: {top_subsystems[:5]}... (and {top_n-5} more)")
 
     # Create 'Other' category
-    df['system_category'] = df['SystemDescription'].apply(
-        lambda x: x if x in top_systems else 'Other'
+    df['subsystem_category'] = df['SubsystemDescription'].apply(
+        lambda x: x if x in top_subsystems else 'Other'
     )
 
     # One-hot encode
-    system_dummies = pd.get_dummies(df['system_category'], prefix='system')
+    subsystem_dummies = pd.get_dummies(df['subsystem_category'], prefix='subsystem')
 
     # Add to df
-    df = pd.concat([df, system_dummies], axis=1)
+    df = pd.concat([df, subsystem_dummies], axis=1)
 
-    print(f"    Created {len(system_dummies.columns)} system columns")
+    print(f"    Created {len(subsystem_dummies.columns)} subsystem columns")
 
     return df
 
@@ -252,8 +242,9 @@ def main():
     df = pd.read_parquet(input_path)
     print(f"  Loaded {len(df):,} rows x {len(df.columns)} columns")
 
-    # Define entity columns
-    entity_cols = ['UniversityID', 'BuildingID', 'SystemDescription']
+    # Define entity columns - NOW USING SUBSYSTEM LEVEL
+    # Note: BuildingName is metadata, not part of entity key
+    entity_cols = ['UniversityID', 'BuildingID', 'SubsystemDescription']
 
     # Create lag features
     print("\n[2/7] Creating lag features...")
@@ -267,9 +258,9 @@ def main():
     print("\n[4/7] Creating derived features...")
     df = create_derived_features(df)
 
-    # One-hot encode systems
-    print("\n[5/7] Encoding system categories...")
-    df = encode_systems(df, top_n=15)
+    # One-hot encode subsystems (increased from 15 systems to 20 subsystems)
+    print("\n[5/7] Encoding subsystem categories...")
+    df = encode_subsystems(df, top_n=20)
 
     # Create target
     print("\n[6/7] Creating target variable...")
@@ -293,7 +284,7 @@ def main():
 
     # Check 2: Feature count
     print(f"\n✓ Feature count:")
-    feature_cols = [col for col in df.columns if col not in entity_cols + ['month_date', 'year', 'month', 'SystemDescription', 'system_category', 'Type']]
+    feature_cols = [col for col in df.columns if col not in entity_cols + ['month_date', 'year', 'month', 'SystemDescription', 'SubsystemDescription', 'BuildingName', 'subsystem_category', 'Type']]
     print(f"  Total features: {len(feature_cols)}")
     print(f"  Feature list:")
     for col in sorted(feature_cols):
