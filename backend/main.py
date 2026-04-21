@@ -13,6 +13,18 @@ import numpy as np
 import joblib
 import os
 from datetime import datetime
+from schemas.chat_models import ChatRequest, ChatResponse
+from services.data_service import get_data_service
+from services.session_manager import get_session_manager
+import config
+
+# Choose LLM backend based on configuration
+if config.USE_OLLAMA:
+    from services.ollama_service import get_ollama_service as get_llm_service
+    print("✓ Using Ollama (Local/Free)")
+else:
+    from services.llm_service import get_llm_service
+    print("✓ Using Claude API")
 
 app = FastAPI(title="PredicX API", version="1.0.0")
 
@@ -378,314 +390,108 @@ async def get_feature_importance():
 
 
 # ============================================================================
-# CHAT ASSISTANT ENDPOINT (Phase 1: Keyword-based)
+# PHASE 2: AI-POWERED CHAT with Session Management
 # ============================================================================
-
-class ChatMessage(BaseModel):
-    role: str  # "user" or "assistant"
-    content: str
-    timestamp: Optional[str] = None
-
-class ChatRequest(BaseModel):
-    message: str
-    conversation_history: List[ChatMessage] = []
-    filters: Optional[Dict[str, Any]] = {}
-
-class ChatResponse(BaseModel):
-    response: str
-    suggestions: List[str]
-    data: Optional[Dict[str, Any]] = None
-    chart_type: Optional[str] = None
-
-def analyze_query_intent(message: str) -> Dict[str, Any]:
-    """
-    Analyze user message and determine intent + entities
-    Priority order: cost > risk > building > trend > defect > recommendation
-    """
-    msg_lower = message.lower()
-
-    intent = {
-        'type': 'general',
-        'entities': {
-            'metric': None,
-            'system': None,
-            'building': None,
-            'time_period': None,
-            'defect_type': None
-        }
-    }
-
-    # Priority-based intent detection (order matters!)
-    # 1. Cost analysis (highest priority for cost-related queries)
-    if any(word in msg_lower for word in ['cost', 'expensive', 'price', 'money', 'budget', '$', 'spend']):
-        intent['type'] = 'cost_analysis'
-
-    # 2. Risk analysis
-    elif any(word in msg_lower for word in ['risk', 'predict', 'probability', 'likely', 'failure rate', 'dangerous']):
-        intent['type'] = 'risk_analysis'
-
-    # 3. Building-specific queries
-    elif any(word in msg_lower for word in ['building', 'location', 'where', 'which building', 'facility']):
-        intent['type'] = 'building_analysis'
-
-    # 4. Trend analysis
-    elif any(word in msg_lower for word in ['trend', 'over time', 'monthly', 'timeline', 'history', 'recent', 'last month']):
-        intent['type'] = 'trend_analysis'
-
-    # 5. Recommendations
-    elif any(word in msg_lower for word in ['recommend', 'suggest', 'should', 'priority', 'what to do', 'next steps']):
-        intent['type'] = 'recommendation'
-
-    # 6. Defect/problem queries (lower priority - many queries have these words)
-    elif any(word in msg_lower for word in ['defect', 'problem', 'issue', 'broken', 'common', 'frequent']):
-        intent['type'] = 'defect_intelligence'
-
-    # 7. System-specific queries
-    elif any(word in msg_lower for word in ['system', 'hvac', 'electrical', 'plumbing', 'lighting']):
-        intent['type'] = 'defect_intelligence'  # Show systems as defects
-
-    # Detect metrics
-    if any(word in msg_lower for word in ['top', 'highest', 'most', 'worst']):
-        intent['entities']['metric'] = 'top'
-    elif any(word in msg_lower for word in ['lowest', 'least', 'best', 'cheapest']):
-        intent['entities']['metric'] = 'bottom'
-
-    # Detect systems
-    systems = ['hvac', 'electrical', 'plumbing', 'lighting', 'elevator', 'heating', 'cooling']
-    for sys in systems:
-        if sys in msg_lower:
-            intent['entities']['system'] = sys
-
-    print(f"[DEBUG] Query: '{message}' -> Intent: {intent['type']}")
-    return intent
-
-def generate_response(intent: Dict[str, Any], filters: Dict = {}) -> ChatResponse:
-    """
-    Generate response based on intent and available data
-    """
-    intent_type = intent['type']
-
-    try:
-        # COST ANALYSIS
-        if intent_type == 'cost_analysis':
-            if df_defect_summary is not None:
-                top_costs = df_defect_summary.nlargest(5, 'total_cost')
-
-                response = "💰 **Top 5 Most Expensive Defect Categories:**\n\n"
-                chart_data = []
-
-                for idx, row in top_costs.iterrows():
-                    cost = row['total_cost']
-                    count = row['count']
-                    category = row['defect_category']
-                    response += f"**{idx+1}. {category}**\n"
-                    response += f"   • Total Cost: ${cost:,.0f}\n"
-                    response += f"   • Occurrences: {count:,}\n"
-                    response += f"   • Avg Cost: ${row['avg_cost']:,.0f}\n\n"
-
-                    chart_data.append({
-                        'category': category[:30],
-                        'total_cost': float(cost),
-                        'count': int(count)
-                    })
-
-                return ChatResponse(
-                    response=response,
-                    suggestions=[
-                        "Show me HVAC cost breakdown",
-                        "Which buildings have highest costs?",
-                        "How can we reduce maintenance costs?"
-                    ],
-                    data={'chart_data': chart_data},
-                    chart_type='cost_bar'
-                )
-
-        # RISK ANALYSIS
-        elif intent_type == 'risk_analysis':
-            if df_impact_summary is not None:
-                # Sort by average risk probability (show top risky systems)
-                high_risk = df_impact_summary.nlargest(5, 'avg_risk')
-
-                response = "⚠️ **Top 5 Highest Risk Systems:**\n\n"
-
-                for idx, (_, row) in enumerate(high_risk.iterrows(), 1):
-                    category = row['defect_category']
-                    avg_risk = row['avg_risk'] * 100  # Convert to percentage
-                    count = row['count']
-                    total_cost = row['total_cost']
-
-                    response += f"**{idx}. {category}**\n"
-                    response += f"   • Risk Probability: {avg_risk:.1f}%\n"
-                    response += f"   • UPM Events: {count:,}\n"
-                    response += f"   • Estimated Cost: ${total_cost:,.0f}\n\n"
-
-                return ChatResponse(
-                    response=response,
-                    suggestions=[
-                        "What's driving these risks?",
-                        "Show me risk trends over time",
-                        "Which buildings have highest risk?"
-                    ]
-                )
-
-        # DEFECT INTELLIGENCE
-        elif intent_type == 'defect_intelligence':
-            if df_defect_summary is not None:
-                top_defects = df_defect_summary.nlargest(5, 'count')
-
-                response = "🔧 **Most Frequent Defect Types:**\n\n"
-
-                for idx, row in top_defects.iterrows():
-                    category = row['defect_category']
-                    count = row['count']
-                    pct = row['percentage']
-                    response += f"**{idx+1}. {category}**\n"
-                    response += f"   • Occurrences: {count:,} ({pct:.1f}%)\n"
-                    response += f"   • Avg Cost: ${row['avg_cost']:,.0f}\n\n"
-
-                return ChatResponse(
-                    response=response,
-                    suggestions=[
-                        "Show me defect trends",
-                        "Which buildings have most defects?",
-                        "How do we prevent these issues?"
-                    ]
-                )
-
-        # TREND ANALYSIS
-        elif intent_type == 'trend_analysis':
-            if df_monthly_defect is not None:
-                recent_months = df_monthly_defect.sort_values('month', ascending=False).head(6)
-
-                response = "📈 **Recent Defect Trends (Last 6 Months):**\n\n"
-
-                total_recent = recent_months['count'].sum()
-                total_cost_recent = recent_months['total_cost'].sum()
-
-                response += f"• Total Defects: {total_recent:,}\n"
-                response += f"• Total Cost: ${total_cost_recent:,.0f}\n"
-                response += f"• Average per Month: {total_recent/6:,.0f} defects\n\n"
-
-                response += "**Monthly Breakdown:**\n"
-                for _, row in recent_months.iterrows():
-                    response += f"• {row['month']}: {row['count']:,} defects (${row['total_cost']:,.0f})\n"
-
-                return ChatResponse(
-                    response=response,
-                    suggestions=[
-                        "What's the trend for HVAC defects?",
-                        "Compare this year vs last year",
-                        "Forecast next month's defects"
-                    ]
-                )
-
-        # BUILDING ANALYSIS
-        elif intent_type == 'building_analysis':
-            if df_building_defect is not None:
-                # Sort by impact score (total_impact column)
-                building_summary = df_building_defect.sort_values('total_impact', ascending=False).head(5)
-
-                response = "🏢 **Top 5 Buildings by Maintenance Impact:**\n\n"
-
-                for idx, row in building_summary.iterrows():
-                    bldg_name = row.get('building_name', row.get('BuildingName', row.get('BuildingID', 'Unknown')))
-                    uni_name = row.get('university_name', f"University {row.get('UniversityID', 'Unknown')}")
-
-                    response += f"**{building_summary.index.get_loc(idx)+1}. {bldg_name}** ({uni_name})\n"
-                    response += f"   • Total Events: {int(row['count']):,}\n"
-                    response += f"   • Total Cost: ${row['total_cost']:,.0f}\n"
-                    response += f"   • Risk Score: {row['total_impact']:.2f}\n\n"
-
-                return ChatResponse(
-                    response=response,
-                    suggestions=[
-                        "What systems fail most in this building?",
-                        "Show me monthly trends for buildings",
-                        "Which university has the most issues?"
-                    ]
-                )
-
-        # RECOMMENDATION
-        elif intent_type == 'recommendation':
-            response = "💡 **Maintenance Recommendations:**\n\n"
-
-            if df_impact_summary is not None:
-                critical = df_impact_summary[df_impact_summary['risk_level'] == 'Critical'].head(3)
-
-                response += "**Priority Actions:**\n"
-                for idx, row in critical.iterrows():
-                    response += f"{idx+1}. Address **{row['defect_category']}**\n"
-                    response += f"   • {row['count']:,} cases with ${row['total_cost']:,.0f} in costs\n"
-
-                response += "\n**Suggested Focus Areas:**\n"
-                response += "• Implement preventive maintenance for high-frequency defects\n"
-                response += "• Allocate budget to critical risk categories\n"
-                response += "• Schedule inspections for buildings with highest impact scores\n"
-
-            return ChatResponse(
-                response=response,
-                suggestions=[
-                    "What's the ROI of preventive maintenance?",
-                    "Create a maintenance schedule",
-                    "Show me budget optimization options"
-                ]
-            )
-
-    except Exception as e:
-        print(f"Error generating response: {e}")
-
-    # DEFAULT RESPONSE
-    response = """👋 **Hello! I'm your Maintenance Intelligence Assistant.**
-
-I can help you analyze:
-• 💰 **Cost Analysis** - Find expensive defects and cost drivers
-• ⚠️ **Risk Predictions** - Identify high-risk systems
-• 🔧 **Defect Patterns** - Analyze failure trends
-• 🏢 **Building Insights** - Compare building performance
-• 📈 **Trends** - Track changes over time
-• 💡 **Recommendations** - Get maintenance suggestions
-
-**Try asking:**
-• "What are the most expensive defects?"
-• "Show me high-risk systems"
-• "Which buildings need attention?"
-• "What's trending this month?"
-"""
-
-    return ChatResponse(
-        response=response,
-        suggestions=[
-            "What are the most expensive defects?",
-            "Show me high-risk systems",
-            "Which buildings have most issues?",
-            "What defects are trending?"
-        ]
-    )
 
 @app.post("/api/chat", response_model=ChatResponse)
 async def chat_assistant(request: ChatRequest):
     """
-    Chat assistant endpoint - Phase 1 (keyword-based)
+    AI-powered chat assistant with conversation history
+    Uses Claude API with function calling for intelligent responses
     """
     try:
-        # Analyze user message
-        intent = analyze_query_intent(request.message)
+        # Get or create session
+        session_manager = get_session_manager()
+        session = session_manager.get_or_create_session(request.session_id)
 
-        # Generate response
-        response = generate_response(intent, request.filters)
+        # Add user message to session
+        session.add_message("user", request.message)
 
-        return response
+        # Get LLM service
+        llm_service = get_llm_service()
+
+        # Get conversation history (limit to last 10 messages for context window)
+        conversation_history = session.get_history(limit=10)
+
+        # Call Claude API with function calling
+        result = llm_service.chat(
+            user_message=request.message,
+            conversation_history=conversation_history[:-1]  # Exclude current message (already in user_message)
+        )
+
+        # Add assistant response to session
+        session.add_message("assistant", result["response"])
+
+        # Return response with session ID
+        return ChatResponse(
+            response=result["response"],
+            suggestions=result["suggestions"],
+            session_id=session.session_id,  # Return session ID for frontend
+            data=result.get("data"),
+            chart_type=result.get("chart_type"),
+            function_calls=result.get("function_calls", [])
+        )
 
     except Exception as e:
         print(f"Chat error: {e}")
+        import traceback
+        traceback.print_exc()
+
         return ChatResponse(
-            response=f"I encountered an error processing your request. Please try rephrasing your question.",
+            response="I encountered an error processing your request. Please try again or rephrase your question.",
             suggestions=[
-                "What are the most expensive defects?",
+                "What are the most expensive systems?",
                 "Show me high-risk systems",
-                "Help"
+                "Which buildings need attention?"
             ]
         )
+
+
+# ============================================================================
+# SESSION MANAGEMENT ENDPOINTS
+# ============================================================================
+
+@app.get("/api/sessions")
+async def list_sessions():
+    """List all chat sessions"""
+    session_manager = get_session_manager()
+    return {"sessions": session_manager.list_sessions()}
+
+
+@app.get("/api/sessions/{session_id}")
+async def get_session(session_id: str):
+    """Get a specific session with full conversation history"""
+    session_manager = get_session_manager()
+    session = session_manager.get_session(session_id)
+
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    return session.to_dict()
+
+
+@app.post("/api/sessions")
+async def create_session():
+    """Create a new chat session"""
+    session_manager = get_session_manager()
+    session = session_manager.create_session()
+
+    return {
+        "session_id": session.session_id,
+        "created_at": session.created_at.isoformat()
+    }
+
+
+@app.delete("/api/sessions/{session_id}")
+async def delete_session(session_id: str):
+    """Delete a chat session"""
+    session_manager = get_session_manager()
+    success = session_manager.delete_session(session_id)
+
+    if not success:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    return {"status": "deleted", "session_id": session_id}
 
 
 if __name__ == "__main__":

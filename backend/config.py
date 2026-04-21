@@ -15,15 +15,22 @@ SYSTEM_MONTH_DATA_PATH = DATA_DIR / "system_month_data.csv"
 FEATURE_IMPORTANCE_PATH = MODELS_DIR / "feature_importance.csv"
 MODEL_PATH = MODELS_DIR / "xgboost_upm_predictor.pkl"
 
-# Ollama settings
-OLLAMA_BASE_URL = "http://localhost:11434"
-OLLAMA_MODEL = "llama3.1:8b"  # Can be changed to "mistral", "phi3", etc.
-OLLAMA_TIMEOUT = 60  # seconds
+# LLM Backend Selection (Phase 2)
+USE_OLLAMA = os.getenv("USE_OLLAMA", "true").lower() == "true"  # Default: Use Ollama (free)
+
+# Ollama settings (Local/Free)
+OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "phi3:latest")  # Using phi3 (already downloaded)
+OLLAMA_TIMEOUT = 120  # seconds (increased for CPU-only mode)
+
+# Claude API settings (Paid - optional)
+ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
+CLAUDE_MODEL = "claude-3-5-sonnet-20241022"  # Claude 3.5 Sonnet
 
 # Chat settings
 MAX_CONVERSATION_HISTORY = 10  # Keep last N messages
 DEFAULT_TEMPERATURE = 0.1  # Low temperature for factual responses
-MAX_TOKENS = 2000
+MAX_TOKENS = 4000  # Increased for Phase 2
 
 # Cost estimation (since we don't have actual cost data)
 COST_PER_UPM_EVENT = 500  # Estimated cost per UPM event in dollars
