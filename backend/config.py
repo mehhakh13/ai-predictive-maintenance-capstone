@@ -3,6 +3,10 @@ Configuration settings for the Predictive Maintenance Backend
 """
 import os
 from pathlib import Path
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Base paths
 BASE_DIR = Path("/home/sradmin/ai-predictive-maintenance-capstone")
@@ -21,11 +25,11 @@ USE_OLLAMA = os.getenv("USE_OLLAMA", "true").lower() == "true"  # Default: Use O
 # Ollama settings (Local/Free)
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "phi3:latest")  # Using phi3 (already downloaded)
-OLLAMA_TIMEOUT = 120  # seconds (increased for CPU-only mode)
+OLLAMA_TIMEOUT = 180  # seconds (increased for CPU-only mode - allows time for tool execution)
 
 # Claude API settings (Paid - optional)
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
-CLAUDE_MODEL = "claude-3-5-sonnet-20241022"  # Claude 3.5 Sonnet
+CLAUDE_MODEL = "claude-sonnet-4-20250514"  # Claude Sonnet 4 (working model)
 
 # Chat settings
 MAX_CONVERSATION_HISTORY = 10  # Keep last N messages

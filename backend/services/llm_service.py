@@ -18,7 +18,10 @@ class LLMService:
         if not config.ANTHROPIC_API_KEY:
             raise ValueError("ANTHROPIC_API_KEY not set in environment")
 
-        self.client = anthropic.Anthropic(api_key=config.ANTHROPIC_API_KEY)
+        self.client = anthropic.Anthropic(
+            api_key=config.ANTHROPIC_API_KEY,
+            timeout=60.0  # 60 second timeout for API calls
+        )
         self.model = config.CLAUDE_MODEL
 
         # Combine all tool definitions
