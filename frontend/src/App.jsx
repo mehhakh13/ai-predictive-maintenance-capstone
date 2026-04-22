@@ -8,6 +8,7 @@ import Prediction from './pages/Prediction';
 import RiskRanking from './pages/RiskRanking';
 import Explainability from './pages/Explainability';
 import DefectIntelligence from './pages/DefectIntelligence';
+import DefectAnalytics from './pages/DefectAnalytics';
 import ChatAssistant from './pages/ChatAssistant';
 import './App.css';
 
@@ -26,6 +27,7 @@ function App() {
             <Route path="/risk-ranking" element={<RiskRanking />} />
             <Route path="/explainability" element={<Explainability />} />
             <Route path="/defect-intelligence" element={<DefectIntelligence />} />
+            <Route path="/defect-analytics" element={<DefectAnalytics />} />
             <Route path="/chat" element={<ChatAssistant />} />
           </Routes>
         </main>

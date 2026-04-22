@@ -1,0 +1,186 @@
+{
+  "total_records": 818763,
+  "universities": 6,
+  "buildings": 180,
+  "subsystems": 85,
+  "date_range": {
+    "start": "2008-06-30 20:32:00",
+    "end": "2020-04-21 10:08:00"
+  },
+  "top_recurrence": [
+    {
+      "SubsystemDescription": "Lighting and Branch Wiring",
+      "total_count": 75896,
+      "frequency_per_month": 914.4385934358228
+    },
+    {
+      "SubsystemDescription": "General",
+      "total_count": 64929,
+      "frequency_per_month": 545.6097989200649
+    },
+    {
+      "SubsystemDescription": "Plumbing Fixtures",
+      "total_count": 59231,
+      "frequency_per_month": 779.6922903945616
+    },
+    {
+      "SubsystemDescription": "HVAC",
+      "total_count": 52642,
+      "frequency_per_month": 368.1664721397653
+    },
+    {
+      "SubsystemDescription": "Electrical",
+      "total_count": 50955,
+      "frequency_per_month": 356.3679683120273
+    },
+    {
+      "SubsystemDescription": "Interior Doors",
+      "total_count": 40416,
+      "frequency_per_month": 539.248474647591
+    },
+    {
+      "SubsystemDescription": "Distribution Systems",
+      "total_count": 40152,
+      "frequency_per_month": 456.49085693797065
+    },
+    {
+      "SubsystemDescription": "Controls and Instrumentation",
+      "total_count": 31858,
+      "frequency_per_month": 366.43850606852976
+    },
+    {
+      "SubsystemDescription": "Plumbing",
+      "total_count": 30805,
+      "frequency_per_month": 320.8634565636934
+    },
+    {
+      "SubsystemDescription": "Domestic Water Distribution",
+      "total_count": 29164,
+      "frequency_per_month": 327.7725037290839
+    }
+  ],
+  "top_severity": [
+    {
+      "SubsystemDescription": "General",
+      "severity_score": 54.39867880654143,
+      "avg_cost": 963.2837551995981,
+      "avg_duration": 39.25174691099069
+    },
+    {
+      "SubsystemDescription": "Slab on Grade",
+      "severity_score": 50.00276035438762,
+      "avg_cost": 873.0546428575001,
+      "avg_duration": 899.5
+    },
+    {
+      "SubsystemDescription": "Lighting and Branch Wiring",
+      "severity_score": 20.993316854719797,
+      "avg_cost": 284.0923448203228,
+      "avg_duration": 33.756005997275366
+    },
+    {
+      "SubsystemDescription": "Controls and Instrumentation",
+      "severity_score": 20.39300379487898,
+      "avg_cost": 693.536793774777,
+      "avg_duration": 28.645246350253736
+    },
+    {
+      "SubsystemDescription": "Distribution Systems",
+      "severity_score": 17.788089767640688,
+      "avg_cost": 411.64351956143935,
+      "avg_duration": 54.96464815511944
+    },
+    {
+      "SubsystemDescription": "Inspection",
+      "severity_score": 16.907067896263214,
+      "avg_cost": 1461.5640872198162,
+      "avg_duration": 35.45927060400115
+    },
+    {
+      "SubsystemDescription": "Unclassified",
+      "severity_score": 16.261009014046014,
+      "avg_cost": 2158.735662518259,
+      "avg_duration": 98.65691318327974
+    },
+    {
+      "SubsystemDescription": "Domestic Water Distribution",
+      "severity_score": 16.144660136727808,
+      "avg_cost": 530.5069563885478,
+      "avg_duration": 40.67782681448904
+    },
+    {
+      "SubsystemDescription": "Landscaping",
+      "severity_score": 15.69133498783349,
+      "avg_cost": 4079.6320076013017,
+      "avg_duration": 70.15339561609265
+    },
+    {
+      "SubsystemDescription": "Vehicular Equipment",
+      "severity_score": 14.278488173785075,
+      "avg_cost": 1290.9807864375427,
+      "avg_duration": 31.180508227047024
+    }
+  ],
+  "top_environmental": [
+    {
+      "SubsystemDescription": "Standpipes",
+      "sensitivity_score": 49.65268803618768,
+      "strongest_weather_factor": "total_snow",
+      "strongest_correlation": 0.9999999999999994
+    },
+    {
+      "SubsystemDescription": "Site Clearing",
+      "sensitivity_score": 42.898163244661106,
+      "strongest_weather_factor": "avg_humidity",
+      "strongest_correlation": -0.9828975101400741
+    },
+    {
+      "SubsystemDescription": "Special Facilities",
+      "sensitivity_score": 42.592614874035675,
+      "strongest_weather_factor": "avg_max_temp",
+      "strongest_correlation": 0.6281532621687148
+    },
+    {
+      "SubsystemDescription": "Controls and Instrumentation",
+      "sensitivity_score": 41.427635501701204,
+      "strongest_weather_factor": "avg_wind_speed",
+      "strongest_correlation": -0.6830083018674316
+    },
+    {
+      "SubsystemDescription": "Institutional Equipment",
+      "sensitivity_score": 35.94771512028018,
+      "strongest_weather_factor": "avg_wind_speed",
+      "strongest_correlation": -0.550877297974482
+    },
+    {
+      "SubsystemDescription": "Sanitary Waste",
+      "sensitivity_score": 35.56379777616263,
+      "strongest_weather_factor": "avg_humidity",
+      "strongest_correlation": -0.701743743179094
+    },
+    {
+      "SubsystemDescription": "Other Electrical Systems",
+      "sensitivity_score": 35.558129987234096,
+      "strongest_weather_factor": "avg_humidity",
+      "strongest_correlation": -0.5582916803295469
+    },
+    {
+      "SubsystemDescription": "Interior Doors",
+      "sensitivity_score": 35.418796909610336,
+      "strongest_weather_factor": "total_precipitation",
+      "strongest_correlation": 0.5171197224871478
+    },
+    {
+      "SubsystemDescription": "Domestic Water Distribution",
+      "sensitivity_score": 32.75067024324328,
+      "strongest_weather_factor": "avg_humidity",
+      "strongest_correlation": -0.593392894915297
+    },
+    {
+      "SubsystemDescription": "Terminal & Package Units",
+      "sensitivity_score": 32.241033494633925,
+      "strongest_weather_factor": "avg_humidity",
+      "strongest_correlation": -0.5941851637183841
+    }
+  ]
+}
