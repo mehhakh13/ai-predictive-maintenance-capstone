@@ -143,7 +143,7 @@ const ChatModal = ({ isOpen, onClose }) => {
                   <div className="message-content">
                     <div className="typing-indicator">
                       <Loader className="spinner" size={16} />
-                      <span>Thinking...</span>
+                      <span>Analyzing data... (Using Ollama - may take 30-60s on CPU)</span>
                     </div>
                   </div>
                 </div>

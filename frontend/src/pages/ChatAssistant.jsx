@@ -120,7 +120,7 @@ const ChatAssistant = () => {
               <div className="message-content">
                 <div className="typing-indicator">
                   <Loader className="spinner" size={16} />
-                  <span>Thinking...</span>
+                  <span>Analyzing data... (Using Ollama - this may take 30-60 seconds on CPU)</span>
                 </div>
               </div>
             </div>
