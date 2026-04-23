@@ -8,10 +8,6 @@ import TopContributors from '../components/CostAnalysis/TopContributors';
 import CostDistribution from '../components/CostAnalysis/CostDistribution';
 import OutlierTable from '../components/CostAnalysis/OutlierTable';
 
-/**
- * CostAnalysisPage Component
- * Main dashboard for Maintenance Cost Analysis
- */
 const CostAnalysisPage = () => {
   const [filters, setFilters] = useState({
     dateRange: {
@@ -20,7 +16,8 @@ const CostAnalysisPage = () => {
     },
     university: 'All',
     building: 'All',
-    system: '',
+    system: 'All',
+    subsystem: 'All',
     maintenanceType: 'All'
   });
 
@@ -32,7 +29,12 @@ const CostAnalysisPage = () => {
   const { rawData, filteredData, loading, error, aggregations } = useCostAnalysisData(filters);
 
   const handleFilterChange = (key, value) => {
-    setFilters(prev => ({ ...prev, [key]: value }));
+    setFilters(prev => {
+      if (key === 'system') {
+        return { ...prev, system: value, subsystem: 'All' };
+      }
+      return { ...prev, [key]: value };
+    });
   };
 
   const handleDateRangeChange = (range) => {
@@ -55,22 +57,49 @@ const CostAnalysisPage = () => {
     }));
   };
 
+  // Universities from rawData — always shows all options regardless of filters
   const uniqueUniversities = useMemo(() => {
-    if (!filteredData) return [];
-    return ['All', ...new Set(filteredData.map(item => item.UniversityID))];
-  }, [filteredData]);
+    if (!rawData) return ['All'];
+    const unis = new Set();
+    rawData.forEach(item => {
+      if (item.UniversityID) unis.add(item.UniversityID);
+    });
+    return ['All', ...[...unis].sort()];
+  }, [rawData]);
 
+  // Buildings from rawData — always shows all options regardless of filters
   const uniqueBuildings = useMemo(() => {
-    if (!filteredData) return [];
+    if (!rawData) return [['All', 'All Buildings']];
     const seen = new Map();
-    filteredData.forEach(item => {
+    rawData.forEach(item => {
       if (!seen.has(item.BuildingID)) {
         seen.set(item.BuildingID, item.BuildingLabel || `Building ${item.BuildingID}`);
       }
     });
     const sorted = [...seen.entries()].sort((a, b) => a[1].localeCompare(b[1]));
     return [['All', 'All Buildings'], ...sorted];
-  }, [filteredData]);
+  }, [rawData]);
+
+  const uniqueSystems = useMemo(() => {
+    if (!rawData) return ['All'];
+    const systems = new Set();
+    rawData.forEach(item => {
+      if (item.SystemDescription) systems.add(item.SystemDescription);
+    });
+    return ['All', ...[...systems].sort()];
+  }, [rawData]);
+
+  // Subsystems intentionally narrow based on selected system
+  const uniqueSubsystems = useMemo(() => {
+    if (!rawData) return ['All'];
+    const subs = new Set();
+    rawData.forEach(item => {
+      if (!item.SubsystemDescription) return;
+      if (filters.system !== 'All' && item.SystemDescription !== filters.system) return;
+      subs.add(item.SubsystemDescription);
+    });
+    return ['All', ...[...subs].sort()];
+  }, [rawData, filters.system]);
 
   const availableYears = useMemo(() => {
     if (!rawData || rawData.length === 0) return [];
@@ -177,14 +206,32 @@ const CostAnalysisPage = () => {
             </select>
           </div>
 
-          <div className="filter-group search">
-            <input
-              type="text"
-              className="filter-search"
-              placeholder="Search systems..."
+          <div className="filter-group">
+            <select
+              className="filter-select"
               value={filters.system}
               onChange={(e) => handleFilterChange('system', e.target.value)}
-            />
+            >
+              {uniqueSystems.map(sys => (
+                <option key={sys} value={sys}>
+                  {sys === 'All' ? 'All Systems' : sys}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="filter-group">
+            <select
+              className="filter-select"
+              value={filters.subsystem}
+              onChange={(e) => handleFilterChange('subsystem', e.target.value)}
+            >
+              {uniqueSubsystems.map(sub => (
+                <option key={sub} value={sub}>
+                  {sub === 'All' ? 'All Subsystems' : sub}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div className="filter-group">
