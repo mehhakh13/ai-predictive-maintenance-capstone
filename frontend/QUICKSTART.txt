@@ -1,0 +1,167 @@
+╔═══════════════════════════════════════════════════════════════╗
+║                                                               ║
+║           SYSTEM RISK HEATMAP - QUICK START GUIDE             ║
+║                                                               ║
+╚═══════════════════════════════════════════════════════════════╝
+
+📦 STEP 1: Install Dependencies
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+cd ai-predictive-maintenance-capstone/frontend
+npm install
+
+This installs:
+  - React 19
+  - React Router DOM (routing)
+  - Recharts (charts)
+  - Lucide React (icons)
+
+🚀 STEP 2: Start Development Server
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+npm run dev
+
+Server starts at: http://localhost:5173
+
+🎯 STEP 3: Navigate the Dashboard
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. Home page loads automatically
+2. Click "System Risk Heatmap" card (featured with blue border)
+3. Explore the dashboard:
+   - 5 KPI cards at the top
+   - Interactive heatmap (hover for tooltips, click for details)
+   - Insights panel on right
+   - Charts at the bottom
+
+🎨 KEY INTERACTIONS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Heatmap:
+  - Hover: Tooltip appears (right side)
+  - Click: Modal opens with full details
+  - Toggle "Show Values": Display percentages in cells
+
+Charts:
+  - Hover: Tooltips show exact values
+  - Line chart: Average risk by month
+  - Bar chart: Top risky systems
+
+Insights Panel:
+  - Top 5 risky systems
+  - Biggest risk increases
+  - Smart recommendations
+
+📊 MOCK DATA
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Currently using realistic mock data:
+  - 15 systems × 12 months = 180 cells
+  - HVAC shows high risk in winter & summer
+  - Plumbing shows high risk in winter
+  - All data matches pipeline CSV schema
+
+🔌 SWITCH TO REAL DATA
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Option 1 - CSV Files:
+
+1. Run pipeline:
+   cd ../..  # Back to project root
+   ./scripts/run_full_pipeline.sh
+
+2. Copy CSV files:
+   mkdir -p ai-predictive-maintenance-capstone/frontend/public/data
+   cp data/dashboard/ml_heatmap.csv \
+      ai-predictive-maintenance-capstone/frontend/public/data/
+   cp data/dashboard/historical_heatmap.csv \
+      ai-predictive-maintenance-capstone/frontend/public/data/
+
+3. Update src/hooks/useRiskHeatmapData.js:
+   Replace mock data section with:
+   
+   const mlResponse = await fetch('/data/ml_heatmap.csv');
+   const mlText = await mlResponse.text();
+   const mlData = parseCSV(mlText);
+   
+   const histResponse = await fetch('/data/historical_heatmap.csv');
+   const histText = await histResponse.text();
+   const histData = parseCSV(histText);
+   
+   setMlHeatmap(mlData);
+   setHistoricalHeatmap(histData);
+
+Option 2 - API:
+
+1. Create backend API endpoints
+2. Update src/hooks/useRiskHeatmapData.js with API calls
+
+🛠️ DEVELOPMENT
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Commands:
+  npm run dev     - Start dev server
+  npm run build   - Build for production
+  npm run preview - Preview production build
+  npm run lint    - Run ESLint
+
+📁 PROJECT STRUCTURE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+src/
+├── pages/
+│   └── RiskHeatmapPage.jsx         ← Main dashboard page
+├── components/RiskHeatmap/
+│   ├── Heatmap.jsx                 ← Interactive heatmap
+│   ├── KpiRow.jsx                  ← KPI metrics
+│   ├── InsightsPanel.jsx           ← Insights & recommendations
+│   ├── RiskCharts.jsx              ← Charts
+│   └── CellDetailModal.jsx         ← Detail modal
+└── hooks/
+    └── useRiskHeatmapData.js       ← Data loading (EDIT THIS)
+
+✅ CHECKLIST
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Before starting:
+  ✓ Node.js installed (v18+)
+  ✓ In correct directory (frontend/)
+
+After npm install:
+  ✓ node_modules/ created
+  ✓ No errors in console
+
+After npm run dev:
+  ✓ Server running on port 5173
+  ✓ Browser opens automatically
+
+In the app:
+  ✓ Home page loads
+  ✓ Navigation works
+  ✓ Heatmap displays
+  ✓ Tooltips appear on hover
+  ✓ Modal opens on click
+  ✓ Charts render
+  ✓ Insights panel shows data
+
+🆘 TROUBLESHOOTING
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+"npm: command not found"
+  → Install Node.js from nodejs.org
+
+"Port 5173 already in use"
+  → Kill existing process: lsof -ti:5173 | xargs kill -9
+  → Or use different port: npm run dev -- --port 3000
+
+"Module not found" errors
+  → Delete node_modules and package-lock.json
+  → Run npm install again
+
+Blank page
+  → Check browser console for errors
+  → Verify React DevTools shows components
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Ready to go! Run 'npm install' then 'npm run dev' to start.
