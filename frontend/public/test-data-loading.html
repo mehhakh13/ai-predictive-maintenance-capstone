@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Data Loading Diagnostics</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1200px;
+            margin: 40px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        h1 {
+            color: #1976d2;
+            border-bottom: 3px solid #1976d2;
+            padding-bottom: 10px;
+        }
+        .test-section {
+            background: white;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .status {
+            display: inline-block;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-weight: bold;
+            margin-left: 10px;
+        }
+        .success { background: #4caf50; color: white; }
+        .error { background: #f44336; color: white; }
+        .pending { background: #ff9800; color: white; }
+        .data-preview {
+            background: #f5f5f5;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+        pre {
+            margin: 0;
+            font-size: 12px;
+            white-space: pre-wrap;
+        }
+        button {
+            background: #1976d2;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            margin: 5px;
+        }
+        button:hover {
+            background: #1565c0;
+        }
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 15px 0;
+        }
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        .stat-value {
+            font-size: 32px;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+        .stat-label {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔍 Defect Analytics Data Loading Diagnostics</h1>
+
+    <div class="test-section">
+        <h2>Quick Actions</h2>
+        <button onclick="runAllTests()">🚀 Run All Tests</button>
+        <button onclick="clearCache()">🗑️ Clear All Cache</button>
+        <button onclick="location.reload()">🔄 Reload Page</button>
+    </div>
+
+    <div class="test-section">
+        <h2>File Accessibility Tests</h2>
+        <div id="file-tests"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>Data Structure Validation</h2>
+        <div id="structure-tests"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>Data Statistics</h2>
+        <div id="data-stats"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>Sample Data Preview</h2>
+        <div id="data-preview"></div>
+    </div>
+
+    <script>
+        const FILES_TO_TEST = [
+            {
+                path: '/data/defect_analytics/global_rankings.csv',
+                name: 'Global Rankings',
+                type: 'csv',
+                requiredColumns: ['SubsystemDescription', 'total_count', 'frequency_per_month', 'severity_score']
+            },
+            {
+                path: '/data/defect_analytics/university_rankings.csv',
+                name: 'University Rankings',
+                type: 'csv',
+                requiredColumns: ['UniversityID', 'SubsystemDescription', 'total_count', 'frequency_per_month']
+            },
+            {
+                path: '/data/defect_analytics/building_rankings.csv',
+                name: 'Building Rankings',
+                type: 'csv',
+                requiredColumns: ['UniversityID', 'BuildingName', 'SubsystemDescription', 'total_count']
+            },
+            {
+                path: '/data/ml_defect_analytics/recurrence_forecast_comparison.csv',
+                name: 'Recurrence Forecast Models',
+                type: 'csv',
+                requiredColumns: ['subsystem', 'arima_mae', 'prophet_mae', 'xgb_mae', 'best_model']
+            },
+            {
+                path: '/data/ml_defect_analytics/environmental_model_comparison.csv',
+                name: 'Environmental Models',
+                type: 'csv',
+                requiredColumns: ['model', 'train_mae', 'test_mae', 'train_r2', 'test_r2']
+            },
+            {
+                path: '/data/ml_defect_analytics/survival_cox_model.json',
+                name: 'Survival Analysis Model',
+                type: 'json',
+                requiredFields: ['model', 'c_index', 'n_samples', 'coefficients']
+            }
+        ];
+
+        async function runAllTests() {
+            console.log('🚀 Starting comprehensive data diagnostics...');
+            await testFileAccessibility();
+            await validateDataStructures();
+            await generateStatistics();
+        }
+
+        async function testFileAccessibility() {
+            const container = document.getElementById('file-tests');
+            container.innerHTML = '<p>Testing file accessibility...</p>';
+
+            let results = '';
+            for (const file of FILES_TO_TEST) {
+                try {
+                    const response = await fetch(file.path);
+                    if (response.ok) {
+                        const size = response.headers.get('content-length');
+                        results += `
+                            <div style="margin: 10px 0;">
+                                ✅ <strong>${file.name}</strong>
+                                <span class="status success">ACCESSIBLE</span>
+                                <br><small style="margin-left: 25px;">Path: ${file.path} | Size: ${formatBytes(size)}</small>
+                            </div>
+                        `;
+                    } else {
+                        results += `
+                            <div style="margin: 10px 0;">
+                                ❌ <strong>${file.name}</strong>
+                                <span class="status error">HTTP ${response.status}</span>
+                                <br><small style="margin-left: 25px;">Path: ${file.path}</small>
+                            </div>
+                        `;
+                    }
+                } catch (error) {
+                    results += `
+                        <div style="margin: 10px 0;">
+                            ❌ <strong>${file.name}</strong>
+                            <span class="status error">FAILED</span>
+                            <br><small style="margin-left: 25px;">Error: ${error.message}</small>
+                        </div>
+                    `;
+                }
+            }
+            container.innerHTML = results;
+        }
+
+        async function validateDataStructures() {
+            const container = document.getElementById('structure-tests');
+            container.innerHTML = '<p>Validating data structures...</p>';
+
+            let results = '';
+            for (const file of FILES_TO_TEST) {
+                try {
+                    const response = await fetch(file.path);
+                    const content = await response.text();
+
+                    if (file.type === 'csv') {
+                        const lines = content.trim().split('\n');
+                        const headers = lines[0].split(',');
+                        const missingColumns = file.requiredColumns.filter(col => !headers.includes(col));
+
+                        if (missingColumns.length === 0) {
+                            results += `
+                                <div style="margin: 10px 0;">
+                                    ✅ <strong>${file.name}</strong>
+                                    <span class="status success">VALID</span>
+                                    <br><small style="margin-left: 25px;">Rows: ${lines.length - 1} | Columns: ${headers.length}</small>
+                                </div>
+                            `;
+                        } else {
+                            results += `
+                                <div style="margin: 10px 0;">
+                                    ⚠️ <strong>${file.name}</strong>
+                                    <span class="status error">MISSING COLUMNS</span>
+                                    <br><small style="margin-left: 25px;">Missing: ${missingColumns.join(', ')}</small>
+                                </div>
+                            `;
+                        }
+                    } else if (file.type === 'json') {
+                        const data = JSON.parse(content);
+                        const missingFields = file.requiredFields.filter(field => !(field in data));
+
+                        if (missingFields.length === 0) {
+                            results += `
+                                <div style="margin: 10px 0;">
+                                    ✅ <strong>${file.name}</strong>
+                                    <span class="status success">VALID</span>
+                                    <br><small style="margin-left: 25px;">Fields: ${Object.keys(data).length}</small>
+                                </div>
+                            `;
+                        } else {
+                            results += `
+                                <div style="margin: 10px 0;">
+                                    ⚠️ <strong>${file.name}</strong>
+                                    <span class="status error">MISSING FIELDS</span>
+                                    <br><small style="margin-left: 25px;">Missing: ${missingFields.join(', ')}</small>
+                                </div>
+                            `;
+                        }
+                    }
+                } catch (error) {
+                    results += `
+                        <div style="margin: 10px 0;">
+                            ❌ <strong>${file.name}</strong>
+                            <span class="status error">PARSE ERROR</span>
+                            <br><small style="margin-left: 25px;">${error.message}</small>
+                        </div>
+                    `;
+                }
+            }
+            container.innerHTML = results;
+        }
+
+        async function generateStatistics() {
+            const container = document.getElementById('data-stats');
+            container.innerHTML = '<p>Generating statistics...</p>';
+
+            try {
+                // Load university data
+                const uniResponse = await fetch('/data/defect_analytics/university_rankings.csv');
+                const uniText = await uniResponse.text();
+                const uniLines = uniText.trim().split('\n');
+                const uniData = parseCSV(uniText);
+
+                // Load building data
+                const bldgResponse = await fetch('/data/defect_analytics/building_rankings.csv');
+                const bldgText = await bldgResponse.text();
+                const bldgData = parseCSV(bldgText);
+
+                // Calculate statistics
+                const universities = [...new Set(uniData.map(row => row.UniversityID))];
+                const subsystems = [...new Set(uniData.map(row => row.SubsystemDescription))];
+                const buildings = [...new Set(bldgData.map(row => row.BuildingName))];
+                const totalDefects = uniData.reduce((sum, row) => sum + (parseFloat(row.total_count) || 0), 0);
+
+                container.innerHTML = `
+                    <div class="stats">
+                        <div class="stat-card">
+                            <div class="stat-label">Universities</div>
+                            <div class="stat-value">${universities.length}</div>
+                            <div class="stat-label">IDs: ${universities.sort((a,b) => a-b).join(', ')}</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">Buildings</div>
+                            <div class="stat-value">${buildings.length}</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">Subsystems</div>
+                            <div class="stat-value">${subsystems.length}</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">Total Defects</div>
+                            <div class="stat-value">${totalDefects.toLocaleString()}</div>
+                        </div>
+                    </div>
+
+                    <h3>University Distribution</h3>
+                    <div class="data-preview">
+                        ${universities.map(uni => {
+                            const count = uniData.filter(row => row.UniversityID == uni).length;
+                            return `<div>University ${uni}: ${count} subsystems</div>`;
+                        }).join('')}
+                    </div>
+
+                    <h3>Top 5 Subsystems by Total Count</h3>
+                    <div class="data-preview">
+                        ${uniData
+                            .sort((a, b) => parseFloat(b.total_count) - parseFloat(a.total_count))
+                            .slice(0, 5)
+                            .map((row, idx) => `<div>${idx + 1}. ${row.SubsystemDescription}: ${parseFloat(row.total_count).toLocaleString()} defects</div>`)
+                            .join('')}
+                    </div>
+                `;
+
+                // Show sample data
+                const previewContainer = document.getElementById('data-preview');
+                previewContainer.innerHTML = `
+                    <h3>Sample University Data (First 3 rows)</h3>
+                    <div class="data-preview">
+                        <pre>${JSON.stringify(uniData.slice(0, 3), null, 2)}</pre>
+                    </div>
+
+                    <h3>Sample Building Data (First 3 rows)</h3>
+                    <div class="data-preview">
+                        <pre>${JSON.stringify(bldgData.slice(0, 3), null, 2)}</pre>
+                    </div>
+                `;
+            } catch (error) {
+                container.innerHTML = `<div class="status error">Error: ${error.message}</div>`;
+            }
+        }
+
+        function parseCSV(text) {
+            const lines = text.trim().split('\n');
+            if (lines.length === 0) return [];
+
+            const headers = lines[0].split(',');
+            const result = [];
+
+            for (let i = 1; i < lines.length; i++) {
+                const values = lines[i].split(',');
+                const row = {};
+
+                for (let j = 0; j < headers.length; j++) {
+                    const value = values[j];
+                    if (value && /^-?\d+\.?\d*$/.test(value)) {
+                        row[headers[j]] = parseFloat(value);
+                    } else {
+                        row[headers[j]] = value;
+                    }
+                }
+                result.push(row);
+            }
+
+            return result;
+        }
+
+        function formatBytes(bytes) {
+            if (!bytes) return 'Unknown';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+        }
+
+        function clearCache() {
+            sessionStorage.clear();
+            localStorage.clear();
+            alert('✅ All cache cleared! The page will reload.');
+            location.reload();
+        }
+
+        // Auto-run tests on page load
+        window.addEventListener('load', () => {
+            runAllTests();
+        });
+    </script>
+</body>
+</html>
