@@ -12,22 +12,30 @@ const CSV_PATH = '/cost_data_sample.csv';
  * Maps a row from the real CSV into the shape the dashboard components expect.
  * Real column names on the left, dashboard-expected names on the right.
  */
-const mapRealRow = (row) => ({
-  WOId: row.WOID,                              // real CSV uses uppercase WOID
-  WOStartDate: row.WOStartDate,
-  SystemDescription: row.SystemDescription,
-  SubsystemDescription: row.SubsystemDescription,
-  MaintenanceType: row['PPM/UPM'],             // real CSV uses "PPM/UPM" with slash
-  WOPriority: row.WOPriority,
-  UniversityID: String(row.UniversityID),      // ensure string for consistent filtering
-  BuildingID: String(row.BuildingID),
-  LaborCost: parseFloat(row.LaborCost) || 0,
-  MaterialCost: parseFloat(row.MaterialCost) || 0,
-  OtherCost: parseFloat(row.OtherCost) || 0,
-  TotalCost: parseFloat(row.TotalCost) || 0,
-  State: row['State/Province'],
-  Country: row.Country
-});
+const mapRealRow = (row) => {
+  const buildingId = String(row.BuildingID);
+  const buildingName = (row.BuildingName || '').trim();
+  // Use the name if it's there, otherwise fall back to "Building <ID>"
+  const buildingLabel = buildingName.length > 0 ? buildingName : `Building ${buildingId}`;
+
+  return {
+    WOId: row.WOID,
+    WOStartDate: row.WOStartDate,
+    SystemDescription: row.SystemDescription,
+    SubsystemDescription: row.SubsystemDescription,
+    MaintenanceType: row['PPM/UPM'],
+    WOPriority: row.WOPriority,
+    UniversityID: String(row.UniversityID),
+    BuildingID: buildingId,
+    BuildingLabel: buildingLabel,        // NEW — name or fallback
+    LaborCost: parseFloat(row.LaborCost) || 0,
+    MaterialCost: parseFloat(row.MaterialCost) || 0,
+    OtherCost: parseFloat(row.OtherCost) || 0,
+    TotalCost: parseFloat(row.TotalCost) || 0,
+    State: row['State/Province'],
+    Country: row.Country
+  };
+};
 
 /**
  * Fallback mock data generator (kept as safety net if CSV fails to load).

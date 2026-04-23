@@ -13,7 +13,6 @@ import OutlierTable from '../components/CostAnalysis/OutlierTable';
  * Main dashboard for Maintenance Cost Analysis
  */
 const CostAnalysisPage = () => {
-  // State for filters — defaults to "All Time" so real historical data shows
   const [filters, setFilters] = useState({
     dateRange: {
       start: new Date('2000-01-01'),
@@ -30,51 +29,29 @@ const CostAnalysisPage = () => {
   const [showOutlierModal, setShowOutlierModal] = useState(false);
   const [showExplainThis, setShowExplainThis] = useState(false);
 
-  const { filteredData, loading, error, aggregations } = useCostAnalysisData(filters);
+  const { rawData, filteredData, loading, error, aggregations } = useCostAnalysisData(filters);
 
   const handleFilterChange = (key, value) => {
     setFilters(prev => ({ ...prev, [key]: value }));
   };
 
-const handleDateRangeChange = (range) => {
-    const end = new Date();  // today
-    let start;
+  const handleDateRangeChange = (range) => {
+    const end = new Date();
+    let start, resolvedEnd = end;
 
-    switch (range) {
-      case '3m':
-        start = new Date();
-        start.setMonth(start.getMonth() - 3);
-        break;
-      case '6m':
-        start = new Date();
-        start.setMonth(start.getMonth() - 6);
-        break;
-      case '12m':
-        start = new Date();
-        start.setFullYear(start.getFullYear() - 1);
-        break;
-      case '24m':
-        start = new Date();
-        start.setFullYear(start.getFullYear() - 2);
-        break;
-      case '5y':
-        start = new Date();
-        start.setFullYear(start.getFullYear() - 5);
-        break;
-      case '10y':
-        start = new Date();
-        start.setFullYear(start.getFullYear() - 10);
-        break;
-      case 'all':
-        start = new Date('2000-01-01');
-        break;
-      default:
-        start = new Date('2000-01-01');
+    if (range === 'all') {
+      start = new Date('2000-01-01');
+    } else if (/^\d{4}$/.test(range)) {
+      const year = parseInt(range, 10);
+      start = new Date(`${year}-01-01T00:00:00`);
+      resolvedEnd = new Date(`${year}-12-31T23:59:59`);
+    } else {
+      start = new Date('2000-01-01');
     }
 
     setFilters(prev => ({
       ...prev,
-      dateRange: { start, end }
+      dateRange: { start, end: resolvedEnd }
     }));
   };
 
@@ -85,8 +62,27 @@ const handleDateRangeChange = (range) => {
 
   const uniqueBuildings = useMemo(() => {
     if (!filteredData) return [];
-    return ['All', ...new Set(filteredData.map(item => item.BuildingID))];
+    const seen = new Map();
+    filteredData.forEach(item => {
+      if (!seen.has(item.BuildingID)) {
+        seen.set(item.BuildingID, item.BuildingLabel || `Building ${item.BuildingID}`);
+      }
+    });
+    const sorted = [...seen.entries()].sort((a, b) => a[1].localeCompare(b[1]));
+    return [['All', 'All Buildings'], ...sorted];
   }, [filteredData]);
+
+  const availableYears = useMemo(() => {
+    if (!rawData || rawData.length === 0) return [];
+    const years = new Set();
+    rawData.forEach(item => {
+      if (item.WOStartDate) {
+        const year = new Date(item.WOStartDate).getFullYear();
+        if (!isNaN(year)) years.add(year);
+      }
+    });
+    return [...years].sort((a, b) => b - a);
+  }, [rawData]);
 
   if (loading) {
     return (
@@ -149,12 +145,9 @@ const handleDateRangeChange = (range) => {
               onChange={(e) => handleDateRangeChange(e.target.value)}
             >
               <option value="all">All Time</option>
-              <option value="10y">Last 10 Years</option>
-              <option value="5y">Last 5 Years</option>
-              <option value="24m">Last 24 Months</option>
-              <option value="12m">Last 12 Months</option>
-              <option value="6m">Last 6 Months</option>
-              <option value="3m">Last 3 Months</option>
+              {availableYears.map(year => (
+                <option key={year} value={String(year)}>{year}</option>
+              ))}
             </select>
           </div>
 
@@ -178,10 +171,8 @@ const handleDateRangeChange = (range) => {
               value={filters.building}
               onChange={(e) => handleFilterChange('building', e.target.value)}
             >
-              {uniqueBuildings.map(building => (
-                <option key={building} value={building}>
-                  {building === 'All' ? 'All Buildings' : building}
-                </option>
+              {uniqueBuildings.map(([id, label]) => (
+                <option key={id} value={id}>{label}</option>
               ))}
             </select>
           </div>
