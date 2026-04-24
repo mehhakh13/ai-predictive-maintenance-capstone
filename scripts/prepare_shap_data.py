@@ -12,7 +12,7 @@ import json
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).parent.parent
-CSV_PATH = Path("/Users/preshikashan/Documents/spring2026/ai-predictive-maintenance-capstone/Facility Management Unified Classification Database (FMUCD).csv")
+CSV_PATH = PROJECT_ROOT / "data" / "fmucd_canada.csv"
 OUTPUT_DIR = PROJECT_ROOT / "data" / "shap"
 MODELS_DIR = PROJECT_ROOT / "models"
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)

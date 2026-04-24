@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Home, LayoutDashboard, TrendingUp, AlertCircle, BarChart3, Activity } from 'lucide-react';
+import { Home, LayoutDashboard, TrendingUp, AlertCircle, BarChart3, Activity, Wrench } from 'lucide-react';
 
 const Navbar = () => {
   const location = useLocation();
@@ -11,7 +11,8 @@ const Navbar = () => {
     { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
     { path: '/prediction', icon: TrendingUp, label: 'Prediction' },
     { path: '/risk-ranking', icon: AlertCircle, label: 'Risk Ranking' },
-    { path: '/explainability', icon: BarChart3, label: 'Explainability' }
+    { path: '/explainability', icon: BarChart3, label: 'Explainability' },
+    { path: '/defect-intelligence', icon: Wrench, label: 'Defect Intelligence' }
   ];
 
   return (
