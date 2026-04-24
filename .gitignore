@@ -7,6 +7,7 @@ __pycache__/
 env/
 venv/
 ENV/
+shap_env/
 build/
 develop-eggs/
 dist/
@@ -61,3 +62,11 @@ logs/
 # Streamlit
 .streamlit/
 
+data/
+
+# Node
+node_modules/
+.vite/
+
+# EDA Charts (if these are generated, uncomment to ignore)
+# eda_charts/

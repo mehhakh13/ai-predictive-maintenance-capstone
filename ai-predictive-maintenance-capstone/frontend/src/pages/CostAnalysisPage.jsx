@@ -8,84 +8,110 @@ import TopContributors from '../components/CostAnalysis/TopContributors';
 import CostDistribution from '../components/CostAnalysis/CostDistribution';
 import OutlierTable from '../components/CostAnalysis/OutlierTable';
 
-/**
- * CostAnalysisPage Component
- * Main dashboard for Maintenance Cost Analysis
- * Features:
- * - PPM vs UPM cost comparison
- * - System-level cost breakdown
- * - Monthly cost trends
- * - Top cost contributors
- * - Cost distribution visualization
- * - Outlier detection and analysis
- */
 const CostAnalysisPage = () => {
-  // State for filters
   const [filters, setFilters] = useState({
     dateRange: {
-      start: new Date(new Date().setFullYear(new Date().getFullYear() - 1)), // Last 12 months
+      start: new Date('2000-01-01'),
       end: new Date()
     },
     university: 'All',
     building: 'All',
-    system: '',
+    system: 'All',
+    subsystem: 'All',
     maintenanceType: 'All'
   });
 
-  // State for UI toggles
   const [showPPMvsUPM, setShowPPMvsUPM] = useState(false);
   const [distributionView, setDistributionView] = useState('ppm-upm');
   const [showOutlierModal, setShowOutlierModal] = useState(false);
   const [showExplainThis, setShowExplainThis] = useState(false);
 
-  // Load data with current filters
-  const { filteredData, loading, error, aggregations } = useCostAnalysisData(filters);
+  const { rawData, filteredData, loading, error, aggregations } = useCostAnalysisData(filters);
 
-  // Handle filter changes
   const handleFilterChange = (key, value) => {
-    setFilters(prev => ({
-      ...prev,
-      [key]: value
-    }));
+    setFilters(prev => {
+      if (key === 'system') {
+        return { ...prev, system: value, subsystem: 'All' };
+      }
+      return { ...prev, [key]: value };
+    });
   };
 
   const handleDateRangeChange = (range) => {
-    const now = new Date();
-    let start, end = now;
+    const end = new Date();
+    let start, resolvedEnd = end;
 
-    switch (range) {
-      case '3m':
-        start = new Date(now.setMonth(now.getMonth() - 3));
-        break;
-      case '6m':
-        start = new Date(now.setMonth(now.getMonth() - 6));
-        break;
-      case '12m':
-        start = new Date(now.setFullYear(now.getFullYear() - 1));
-        break;
-      case '24m':
-        start = new Date(now.setFullYear(now.getFullYear() - 2));
-        break;
-      default:
-        start = new Date(now.setFullYear(now.getFullYear() - 1));
+    if (range === 'all') {
+      start = new Date('2000-01-01');
+    } else if (/^\d{4}$/.test(range)) {
+      const year = parseInt(range, 10);
+      start = new Date(`${year}-01-01T00:00:00`);
+      resolvedEnd = new Date(`${year}-12-31T23:59:59`);
+    } else {
+      start = new Date('2000-01-01');
     }
 
     setFilters(prev => ({
       ...prev,
-      dateRange: { start, end }
+      dateRange: { start, end: resolvedEnd }
     }));
   };
 
-  // Get unique values for filter dropdowns
+  // Universities from rawData — always shows all options regardless of filters
   const uniqueUniversities = useMemo(() => {
-    if (!filteredData) return [];
-    return ['All', ...new Set(filteredData.map(item => item.UniversityID))];
-  }, [filteredData]);
+    if (!rawData) return ['All'];
+    const unis = new Set();
+    rawData.forEach(item => {
+      if (item.UniversityID) unis.add(item.UniversityID);
+    });
+    return ['All', ...[...unis].sort()];
+  }, [rawData]);
 
+  // Buildings from rawData — always shows all options regardless of filters
   const uniqueBuildings = useMemo(() => {
-    if (!filteredData) return [];
-    return ['All', ...new Set(filteredData.map(item => item.BuildingID))];
-  }, [filteredData]);
+    if (!rawData) return [['All', 'All Buildings']];
+    const seen = new Map();
+    rawData.forEach(item => {
+      if (!seen.has(item.BuildingID)) {
+        seen.set(item.BuildingID, item.BuildingLabel || `Building ${item.BuildingID}`);
+      }
+    });
+    const sorted = [...seen.entries()].sort((a, b) => a[1].localeCompare(b[1]));
+    return [['All', 'All Buildings'], ...sorted];
+  }, [rawData]);
+
+  const uniqueSystems = useMemo(() => {
+    if (!rawData) return ['All'];
+    const systems = new Set();
+    rawData.forEach(item => {
+      if (item.SystemDescription) systems.add(item.SystemDescription);
+    });
+    return ['All', ...[...systems].sort()];
+  }, [rawData]);
+
+  // Subsystems intentionally narrow based on selected system
+  const uniqueSubsystems = useMemo(() => {
+    if (!rawData) return ['All'];
+    const subs = new Set();
+    rawData.forEach(item => {
+      if (!item.SubsystemDescription) return;
+      if (filters.system !== 'All' && item.SystemDescription !== filters.system) return;
+      subs.add(item.SubsystemDescription);
+    });
+    return ['All', ...[...subs].sort()];
+  }, [rawData, filters.system]);
+
+  const availableYears = useMemo(() => {
+    if (!rawData || rawData.length === 0) return [];
+    const years = new Set();
+    rawData.forEach(item => {
+      if (item.WOStartDate) {
+        const year = new Date(item.WOStartDate).getFullYear();
+        if (!isNaN(year)) years.add(year);
+      }
+    });
+    return [...years].sort((a, b) => b - a);
+  }, [rawData]);
 
   if (loading) {
     return (
@@ -110,7 +136,6 @@ const CostAnalysisPage = () => {
 
   return (
     <div className="cost-analysis-page">
-      {/* Top Bar */}
       <div className="page-header">
         <div className="header-title-row">
           <h1 className="page-title">Maintenance Cost Analysis</h1>
@@ -140,19 +165,18 @@ const CostAnalysisPage = () => {
           </div>
         )}
 
-        {/* Filters Bar */}
         <div className="filters-bar">
           <div className="filter-group">
             <Filter size={16} />
             <select
               className="filter-select"
-              value={filters.dateRange.label || '12m'}
+              value={filters.dateRange.label || 'all'}
               onChange={(e) => handleDateRangeChange(e.target.value)}
             >
-              <option value="3m">Last 3 Months</option>
-              <option value="6m">Last 6 Months</option>
-              <option value="12m">Last 12 Months</option>
-              <option value="24m">Last 24 Months</option>
+              <option value="all">All Time</option>
+              {availableYears.map(year => (
+                <option key={year} value={String(year)}>{year}</option>
+              ))}
             </select>
           </div>
 
@@ -176,22 +200,38 @@ const CostAnalysisPage = () => {
               value={filters.building}
               onChange={(e) => handleFilterChange('building', e.target.value)}
             >
-              {uniqueBuildings.map(building => (
-                <option key={building} value={building}>
-                  {building === 'All' ? 'All Buildings' : building}
+              {uniqueBuildings.map(([id, label]) => (
+                <option key={id} value={id}>{label}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="filter-group">
+            <select
+              className="filter-select"
+              value={filters.system}
+              onChange={(e) => handleFilterChange('system', e.target.value)}
+            >
+              {uniqueSystems.map(sys => (
+                <option key={sys} value={sys}>
+                  {sys === 'All' ? 'All Systems' : sys}
                 </option>
               ))}
             </select>
           </div>
 
-          <div className="filter-group search">
-            <input
-              type="text"
-              className="filter-search"
-              placeholder="Search systems..."
-              value={filters.system}
-              onChange={(e) => handleFilterChange('system', e.target.value)}
-            />
+          <div className="filter-group">
+            <select
+              className="filter-select"
+              value={filters.subsystem}
+              onChange={(e) => handleFilterChange('subsystem', e.target.value)}
+            >
+              {uniqueSubsystems.map(sub => (
+                <option key={sub} value={sub}>
+                  {sub === 'All' ? 'All Subsystems' : sub}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div className="filter-group">
@@ -208,14 +248,10 @@ const CostAnalysisPage = () => {
         </div>
       </div>
 
-      {/* KPI Cards */}
       <KpiRow aggregations={aggregations} totalWorkOrders={filteredData.length} />
 
-      {/* Main Content - 2 Column Layout */}
       <div className="main-content">
-        {/* Left Column */}
         <div className="content-left">
-          {/* Cost Breakdown Chart */}
           <div className="section-card">
             <div className="section-header">
               <div>
@@ -239,7 +275,6 @@ const CostAnalysisPage = () => {
             <CostBreakdownChart data={filteredData} showPPMvsUPM={showPPMvsUPM} />
           </div>
 
-          {/* Cost Trend Chart */}
           <div className="section-card" style={{ marginTop: '1.5rem' }}>
             <div className="section-header">
               <h2 className="section-title">
@@ -252,14 +287,11 @@ const CostAnalysisPage = () => {
           </div>
         </div>
 
-        {/* Right Column */}
         <div className="content-right">
-          {/* Top Contributors */}
           <div className="section-card">
             <TopContributors data={filteredData} />
           </div>
 
-          {/* Cost Distribution */}
           <div className="section-card" style={{ marginTop: '1.5rem' }}>
             <div className="section-header">
               <div>
@@ -286,7 +318,6 @@ const CostAnalysisPage = () => {
         </div>
       </div>
 
-      {/* Bottom Section: Outlier Table */}
       <div className="bottom-section">
         <div className="section-card">
           <OutlierTable
@@ -296,7 +327,6 @@ const CostAnalysisPage = () => {
         </div>
       </div>
 
-      {/* Outlier Modal (if triggered) */}
       {showOutlierModal && (
         <OutlierTable
           data={filteredData}

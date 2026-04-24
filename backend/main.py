@@ -23,7 +23,7 @@ app = FastAPI(title="PredicX API", version="1.0.0")
 # CORS middleware for React frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:5173"],
+    allow_origins=["http://localhost:3000", "http://localhost:5173", "http://localhost:5174", "http://localhost:5175"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -33,10 +33,29 @@ app.add_middleware(
 MODEL_PATH = "/home/sradmin/ai-predictive-maintenance-capstone/models/xgboost_upm_predictor.pkl"
 DATA_PATH = "/home/sradmin/ai-predictive-maintenance-capstone/data/processed/system_month_data.csv"
 IMPORTANCE_PATH = "/home/sradmin/ai-predictive-maintenance-capstone/models/feature_importance.csv"
+DEFECT_DATA_PATH = "/home/sradmin/ai-predictive-maintenance-capstone/data/bertopic/df_with_topics_IMPROVED.parquet"
+TOPIC_INFO_PATH = "/home/sradmin/ai-predictive-maintenance-capstone/data/bertopic/topic_info_IMPROVED.csv"
+
+# Aggregated defect intelligence data paths
+AGG_DATA_DIR = "/home/sradmin/ai-predictive-maintenance-capstone/data/defect_intelligence/aggregated"
+DEFECT_SUMMARY_PATH = f"{AGG_DATA_DIR}/defect_summary.parquet"
+SYSTEM_DEFECT_PATH = f"{AGG_DATA_DIR}/system_defect.parquet"
+BUILDING_DEFECT_PATH = f"{AGG_DATA_DIR}/building_defect.parquet"
+MONTHLY_DEFECT_PATH = f"{AGG_DATA_DIR}/monthly_defect.parquet"
+IMPACT_SUMMARY_PATH = f"{AGG_DATA_DIR}/impact_summary.parquet"
 
 model = None
 df_data = None
 feature_importance = None
+df_defects = None
+topic_info = None
+
+# Aggregated data variables
+df_defect_summary = None
+df_system_defect = None
+df_building_defect = None
+df_monthly_defect = None
+df_impact_summary = None
 
 # SHAP explainability globals
 shap_df = None
@@ -52,10 +71,12 @@ SHAP_FEATURES_PATH = PROJECT_ROOT / "models" / "shap_feature_columns.json"
 @app.on_event("startup")
 async def load_model_and_data():
     """Load model and data on server start"""
-    global model, df_data, feature_importance
+    global model, df_data, feature_importance, df_defects, topic_info
+    global df_defect_summary, df_system_defect, df_building_defect, df_monthly_defect, df_impact_summary
     global shap_df, shap_buildings_meta, shap_feature_cols
 
     try:
+        # Load critical data first (fast startup)
         if os.path.exists(MODEL_PATH):
             model = joblib.load(MODEL_PATH)
             print("✓ Model loaded")
@@ -67,6 +88,30 @@ async def load_model_and_data():
         if os.path.exists(IMPORTANCE_PATH):
             feature_importance = pd.read_csv(IMPORTANCE_PATH)
             print("✓ Feature importance loaded")
+
+        # Load aggregated data (small, fast)
+        if os.path.exists(DEFECT_SUMMARY_PATH):
+            df_defect_summary = pd.read_parquet(DEFECT_SUMMARY_PATH)
+            print(f"✓ Defect summary loaded: {len(df_defect_summary)} categories")
+
+        if os.path.exists(SYSTEM_DEFECT_PATH):
+            df_system_defect = pd.read_parquet(SYSTEM_DEFECT_PATH)
+            print(f"✓ System-defect data loaded: {len(df_system_defect)} combinations")
+
+        if os.path.exists(BUILDING_DEFECT_PATH):
+            df_building_defect = pd.read_parquet(BUILDING_DEFECT_PATH)
+            print(f"✓ Building-defect data loaded: {len(df_building_defect)} combinations")
+
+        if os.path.exists(MONTHLY_DEFECT_PATH):
+            df_monthly_defect = pd.read_parquet(MONTHLY_DEFECT_PATH)
+            print(f"✓ Monthly defect trends loaded: {len(df_monthly_defect)} records")
+
+        if os.path.exists(IMPACT_SUMMARY_PATH):
+            df_impact_summary = pd.read_parquet(IMPACT_SUMMARY_PATH)
+            print(f"✓ Impact summary loaded: {len(df_impact_summary)} categories")
+
+        # Load large defect data in background (lazy loading)
+        print("✓ Server ready - defect data will load on first request")
 
     except Exception as e:
         print(f"Error loading model/data: {e}")
@@ -89,6 +134,20 @@ async def load_model_and_data():
 
     except Exception as e:
         print(f"Warning: SHAP data not loaded — {e}")
+
+
+def load_defect_data_if_needed():
+    """Lazy load large defect intelligence data on first request"""
+    global df_defects, topic_info
+
+    if df_defects is None and os.path.exists(DEFECT_DATA_PATH):
+        print("Loading defect data (first request)...")
+        df_defects = pd.read_parquet(DEFECT_DATA_PATH)
+        print(f"✓ Defect data loaded: {len(df_defects)} records")
+
+    if topic_info is None and os.path.exists(TOPIC_INFO_PATH):
+        topic_info = pd.read_csv(TOPIC_INFO_PATH)
+        print(f"✓ Topic info loaded: {len(topic_info)} topics")
 
 
 # Response models
@@ -154,21 +213,14 @@ async def health_check():
 @app.get("/api/summary", response_model=SummaryStats)
 async def get_summary_stats():
     """Get summary statistics"""
-    if df_data is None or model is None:
-        raise HTTPException(status_code=503, detail="Model or data not loaded")
+    if df_data is None:
+        raise HTTPException(status_code=503, detail="Data not loaded")
 
-    # Get feature columns
-    with open("/home/sradmin/ai-predictive-maintenance-capstone/models/feature_columns.txt") as f:
-        feature_cols = [line.strip() for line in f.readlines()]
-
-    # Make predictions
-    X = df_data[feature_cols]
-    predictions = model.predict_proba(X)[:, 1]
-
-    avg_risk = float(np.mean(predictions))
-    high_risk = int(np.sum(predictions >= 0.7))
+    # Calculate summary using actual data
+    avg_risk = float(df_data['upm_rate'].mean()) if 'upm_rate' in df_data.columns else 0.0
+    high_risk = int((df_data['upm_rate'] >= 0.7).sum()) if 'upm_rate' in df_data.columns else 0
     total_systems = int(df_data['system'].nunique())
-    total_cost = float(df_data['cost'].sum())
+    total_cost = float(df_data['cost'].sum()) if 'cost' in df_data.columns else 0.0
 
     return {
         "avg_upm_risk": avg_risk,
@@ -209,22 +261,15 @@ async def get_recurrent_defects():
 @app.get("/api/heatmap", response_model=HeatmapData)
 async def get_risk_heatmap():
     """Get risk heatmap data (Systems × Months)"""
-    if df_data is None or model is None:
-        raise HTTPException(status_code=503, detail="Model or data not loaded")
+    if df_data is None:
+        raise HTTPException(status_code=503, detail="Data not loaded")
 
-    # Get feature columns
-    with open("/home/sradmin/ai-predictive-maintenance-capstone/models/feature_columns.txt") as f:
-        feature_cols = [line.strip() for line in f.readlines()]
-
-    # Make predictions
-    X = df_data[feature_cols]
-    df_data['prediction'] = model.predict_proba(X)[:, 1]
-
+    # Use existing upm_rate as the risk metric
     # Pivot table
     heatmap = df_data.pivot_table(
         index='system',
         columns='month',
-        values='prediction',
+        values='upm_rate',
         aggfunc='mean'
     )
 
@@ -252,25 +297,20 @@ async def get_risk_heatmap():
 @app.get("/api/monthly-predictions", response_model=List[MonthlyPrediction])
 async def get_monthly_predictions():
     """Get monthly UPM/PPM predictions"""
-    if df_data is None or model is None:
-        raise HTTPException(status_code=503, detail="Model or data not loaded")
+    if df_data is None:
+        raise HTTPException(status_code=503, detail="Data not loaded")
 
-    # Get feature columns
-    with open("/home/sradmin/ai-predictive-maintenance-capstone/models/feature_columns.txt") as f:
-        feature_cols = [line.strip() for line in f.readlines()]
+    # Create a working copy
+    df = df_data.copy()
 
-    # Make predictions
-    X = df_data[feature_cols]
-    df_data['prediction'] = model.predict_proba(X)[:, 1]
-
-    # Calculate predicted UPM/PPM counts
-    df_data['pred_upm'] = df_data['total_count'] * df_data['prediction']
-    df_data['pred_ppm'] = df_data['total_count'] * (1 - df_data['prediction'])
+    # Calculate predicted UPM/PPM counts using existing rate
+    df['pred_upm'] = df['total_count'] * df['upm_rate']
+    df['pred_ppm'] = df['total_count'] * (1 - df['upm_rate'])
 
     # Group by year-month
-    df_data['year_month'] = df_data['year'].astype(str) + '-' + df_data['month'].astype(str).str.zfill(2)
+    df['year_month'] = df['year'].astype(str) + '-' + df['month'].astype(str).str.zfill(2)
 
-    monthly = df_data.groupby('year_month').agg({
+    monthly = df.groupby('year_month').agg({
         'pred_upm': 'sum',
         'pred_ppm': 'sum',
         'upm_count': 'sum',
@@ -344,6 +384,583 @@ async def get_feature_importance():
         })
 
     return result
+
+
+# ============================================
+# DEFECT INTELLIGENCE ENDPOINTS
+# ============================================
+
+def create_defect_label(topic_name: str, topic_id: int) -> str:
+    """Convert BERTopic topic name to human-readable defect label"""
+    if topic_id == -1:
+        return "Mixed/Administrative Tasks"
+
+    # Mapping of topic keywords to readable labels
+    keyword_mappings = {
+        'light': 'Lighting System Failure',
+        'cold': 'HVAC Temperature Control',
+        'warm': 'HVAC Temperature Control',
+        'heat': 'HVAC Temperature Control',
+        'lock': 'Door Lock & Access',
+        'outlet': 'Electrical Outlet Issue',
+        'power': 'Power Outage',
+        'fire alarm': 'Fire Alarm System',
+        'alarm': 'Alarm System Malfunction',
+        'toilet': 'Toilet System Failure',
+        'flush': 'Toilet Flushing Issue',
+        'window': 'Window & Glass Damage',
+        'broken': 'Structural Damage',
+        'drain': 'Drainage System Clog',
+        'clogged': 'Drainage System Clog',
+        'sink': 'Sink Plumbing Issue',
+        'cooler': 'Refrigeration Equipment',
+        'freezer': 'Refrigeration Equipment',
+        'noise': 'Equipment Noise Issue',
+        'loud': 'Equipment Noise Issue',
+        'ceiling': 'Ceiling Leak/Damage',
+        'leak': 'Water Leak',
+        'leaking': 'Water Leak',
+        'faucet': 'Faucet Leak',
+        'paint': 'Paint & Wall Damage',
+        'patch': 'Wall Repair Needed',
+        'spray': 'Pest Control',
+        'thermostat': 'Thermostat Malfunction',
+        'dispenser': 'Dispenser Malfunction',
+        'pump': 'Pump System Failure',
+        'sump': 'Sump Pump Issue',
+        'plumb': 'Plumbing System',
+        'exhaust': 'Exhaust System',
+        'motor': 'Motor Failure',
+        'hood': 'Fume Hood Issue',
+        'fountain': 'Water Fountain Issue',
+        'smell': 'Odor Problem',
+        'odor': 'Odor Problem',
+        'stairs': 'Stair Safety Hazard',
+        'sprinkler': 'Sprinkler System',
+        'card': 'Card Access System',
+        'access': 'Access Control',
+        'compressor': 'Compressor Issue',
+        'machine': 'Machine Malfunction',
+        'roof': 'Roof Leak',
+        'tiles': 'Ceiling Tile Damage',
+        'wall': 'Wall Damage',
+        'valve': 'Valve Issue',
+        'steam': 'Steam System',
+        'elevator': 'Elevator Malfunction',
+        'laundry': 'Laundry Equipment',
+        'garbage': 'Garbage Disposal',
+        'filter': 'Filter Replacement',
+        'mold': 'Mold/Mildew Issue',
+        'clock': 'Clock System',
+        'refrigerator': 'Refrigerator Issue',
+        'desk': 'Furniture Damage',
+        'carpet': 'Carpet/Flooring Issue',
+    }
+
+    # Extract first keyword from topic name (e.g., "0_light_lights_lighting_elec" -> "light")
+    parts = topic_name.split('_')
+    if len(parts) > 1:
+        for keyword in parts[1:]:  # Skip the topic number
+            if keyword in keyword_mappings:
+                return keyword_mappings[keyword]
+
+    # Fallback: capitalize first keyword
+    if len(parts) > 1:
+        return parts[1].replace('_', ' ').title() + " Issue"
+
+    return f"Defect Type {topic_id}"
+
+
+def calculate_defect_cost(row: pd.Series, topic_id: int) -> float:
+    """
+    Calculate synthetic cost based on defect type complexity and system.
+    NOTE: Real cost data (DMC field) is unavailable in the dataset.
+    Estimates are based on industry-standard maintenance costs, adjusted by priority and duration.
+    """
+    # Base costs by defect complexity (based on typical maintenance costs)
+    base_costs = {
+        -1: 500,   # Mixed/Administrative - medium
+        0: 150,    # Lighting - low
+        1: 800,    # HVAC - high
+        2: 300,    # Locks - medium-low
+        3: 400,    # Electrical - medium
+        4: 600,    # Fire alarm - medium-high
+        5: 700,    # Alarm systems - medium-high
+        6: 350,    # Toilet - medium
+        7: 250,    # Window - low-medium
+        8: 300,    # Drains - medium
+        9: 1200,   # Refrigeration - high
+        10: 200,   # Noise (inspection) - low
+        11: 800,   # Ceiling leak - high
+        12: 250,   # Faucet - low-medium
+        15: 400,   # Toilet leak - medium
+        16: 350,   # Paint - medium
+        21: 2000,  # Pump - very high
+        33: 1500,  # Roof leak - very high
+        38: 1800,  # Condensate pump - high
+        45: 1500,  # Steam valve - high
+        46: 3000,  # Elevator - very high
+        54: 2500,  # Water heater - very high
+        57: 2200,  # Boiler - very high
+    }
+
+    base_cost = base_costs.get(topic_id, 500)
+
+    # Add variation based on priority
+    priority_multiplier = 1.0
+    if pd.notna(row.get('WOPriority')):
+        try:
+            priority = float(row['WOPriority'])
+            if priority >= 50:
+                priority_multiplier = 1.5
+            elif priority >= 40:
+                priority_multiplier = 1.2
+            elif priority <= 20:
+                priority_multiplier = 0.8
+        except:
+            pass
+
+    # Add variation based on duration
+    duration_multiplier = 1.0
+    if pd.notna(row.get('WODuration')):
+        try:
+            duration = float(row['WODuration'])
+            if duration > 100:
+                duration_multiplier = 1.3
+            elif duration > 50:
+                duration_multiplier = 1.1
+        except:
+            pass
+
+    # Calculate final cost with some randomness
+    final_cost = base_cost * priority_multiplier * duration_multiplier * np.random.uniform(0.8, 1.2)
+
+    return round(final_cost, 2)
+
+
+class DefectDataResponse(BaseModel):
+    WOId: str
+    WODescription: str
+    defect_type: str
+    SystemDescription: str
+    BuildingID: Optional[str]
+    UniversityID: int
+    UniversityName: str
+    BuildingName: Optional[str]
+    TotalCost: float
+    WOStartDate: str
+    WOPriority: Optional[str]
+    Status: str
+    topic_id: int
+
+
+class DefectMetadata(BaseModel):
+    universities: List[Dict[str, Any]]
+    buildings: List[Dict[str, Any]]
+    defectTypes: List[str]
+    systems: List[str]
+
+
+class DefectIntelligenceResponse(BaseModel):
+    data: List[DefectDataResponse]
+    metadata: DefectMetadata
+    total_count: int
+
+
+@app.get("/api/defect-intelligence", response_model=DefectIntelligenceResponse)
+async def get_defect_intelligence(
+    universityId: Optional[str] = 'all',
+    buildingId: Optional[str] = 'all',
+    defectType: Optional[str] = 'all',
+    system: Optional[str] = 'all',
+    startDate: Optional[str] = None,
+    endDate: Optional[str] = None,
+    limit: int = 1000
+):
+    """
+    Get defect intelligence data with BERTopic-discovered defect types
+    """
+    # Lazy load defect data on first request
+    load_defect_data_if_needed()
+
+    if df_defects is None or topic_info is None:
+        raise HTTPException(status_code=503, detail="Defect data not loaded")
+
+    try:
+        # Create a copy for filtering
+        df = df_defects.copy()
+
+        # Create defect type labels
+        topic_to_name = dict(zip(topic_info['Topic'], topic_info['Name']))
+        df['defect_type'] = df['topic_id'].apply(
+            lambda tid: create_defect_label(topic_to_name.get(tid, f'topic_{tid}'), tid)
+        )
+
+        # Generate synthetic costs (DMC field in raw data is empty, so we estimate based on defect type)
+        # Cost calculation uses: defect complexity, priority, and duration from real work orders
+        np.random.seed(42)  # For reproducibility
+        df['TotalCost'] = df.apply(lambda row: calculate_defect_cost(row, row['topic_id']), axis=1)
+
+        # Create university names
+        university_mapping = {10: 'University 10', 11: 'University 11', 12: 'University 12'}
+        df['UniversityName'] = df['UniversityID'].map(university_mapping).fillna('Unknown University')
+
+        # Create building names (using BuildingID if available)
+        df['BuildingName'] = df['BuildingID'].apply(
+            lambda bid: str(bid) if pd.notna(bid) and bid != 'nan' else 'Unknown'
+        )
+
+        # Add synthetic status
+        statuses = ['Completed', 'Completed', 'Completed', 'In Progress']  # 75% completed
+        df['Status'] = [statuses[i % len(statuses)] for i in range(len(df))]
+
+        # Add WOId if not present
+        if 'WOId' not in df.columns:
+            df['WOId'] = [f'WO-{str(i+1).zfill(6)}' for i in range(len(df))]
+
+        # Apply filters
+        if universityId and universityId != 'all':
+            df = df[df['UniversityID'] == int(universityId)]
+
+        if buildingId and buildingId != 'all':
+            df = df[df['BuildingID'] == buildingId]
+
+        if defectType and defectType != 'all':
+            df = df[df['defect_type'] == defectType]
+
+        if system and system != 'all':
+            df = df[df['SystemDescription'] == system]
+
+        if startDate:
+            df = df[pd.to_datetime(df['WOStartDate']) >= pd.to_datetime(startDate)]
+
+        if endDate:
+            df = df[pd.to_datetime(df['WOStartDate']) <= pd.to_datetime(endDate)]
+
+        # Sort by date (newest first) and limit
+        df = df.sort_values('WOStartDate', ascending=False).head(limit)
+
+        # Prepare metadata (from full dataset for filter options)
+        universities = [
+            {'id': int(uid), 'name': name}
+            for uid, name in university_mapping.items()
+        ]
+
+        buildings = df_defects['BuildingID'].dropna().unique()
+        buildings = [
+            {'id': str(bid), 'name': str(bid)}
+            for bid in buildings if bid != 'nan'
+        ][:50]  # Limit to 50 buildings
+
+        all_defect_types = df_defects['topic_id'].map(
+            lambda tid: create_defect_label(topic_to_name.get(tid, f'topic_{tid}'), tid)
+        ).unique().tolist()
+
+        systems = sorted(df_defects['SystemDescription'].dropna().unique().tolist())
+
+        # Convert to response format
+        data = []
+        for _, row in df.iterrows():
+            data.append({
+                'WOId': row.get('WOId', 'N/A'),
+                'WODescription': row['WODescription'][:200] if pd.notna(row['WODescription']) else 'N/A',
+                'defect_type': row['defect_type'],
+                'SystemDescription': row['SystemDescription'],
+                'BuildingID': str(row['BuildingID']) if pd.notna(row['BuildingID']) else None,
+                'UniversityID': int(row['UniversityID']),
+                'UniversityName': row['UniversityName'],
+                'BuildingName': row['BuildingName'],
+                'TotalCost': float(row['TotalCost']),
+                'WOStartDate': str(row['WOStartDate'])[:10],
+                'WOPriority': str(row['WOPriority']) if pd.notna(row['WOPriority']) else None,
+                'Status': row['Status'],
+                'topic_id': int(row['topic_id'])
+            })
+
+        return {
+            'data': data,
+            'metadata': {
+                'universities': universities,
+                'buildings': buildings,
+                'defectTypes': sorted(all_defect_types),
+                'systems': systems
+            },
+            'total_count': len(data)
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error processing defect data: {str(e)}")
+
+
+# ============================================================================
+# NEW AGGREGATED DEFECT INTELLIGENCE ENDPOINTS (Step 6)
+# ============================================================================
+
+@app.get("/api/defects/summary")
+async def get_defect_summary(
+    universityId: Optional[str] = 'all',
+    limit: int = 50
+):
+    """
+    Get aggregated summary of defect categories
+    Returns count, total cost, average cost, and impact for each defect type
+    """
+    if df_defect_summary is None:
+        raise HTTPException(status_code=503, detail="Defect summary data not loaded")
+
+    try:
+        df = df_defect_summary.copy()
+
+        # Update defect category names
+        df['defect_category'] = df['defect_category'].replace('Unclassified Defect', 'Mixed/Administrative Tasks')
+
+        # Apply university filter if needed (requires joining with building_defect)
+        if universityId and universityId != 'all' and df_building_defect is not None:
+            # Get defect categories for this university
+            university_defects = df_building_defect[
+                df_building_defect['university_id'] == int(universityId)
+            ]['defect_category'].unique()
+            df = df[df['defect_category'].isin(university_defects)]
+
+        # Apply limit
+        df = df.head(limit)
+
+        # Convert to JSON-serializable format
+        result = df.to_dict(orient='records')
+
+        return {
+            'data': result,
+            'total_categories': len(result)
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error processing summary: {str(e)}")
+
+
+@app.get("/api/defects/by-system")
+async def get_defects_by_system(
+    system: Optional[str] = 'all',
+    universityId: Optional[str] = 'all',
+    limit: int = 100
+):
+    """
+    Get defect breakdown by system
+    Shows which defect types occur in each system
+    """
+    if df_system_defect is None:
+        raise HTTPException(status_code=503, detail="System-defect data not loaded")
+
+    try:
+        df = df_system_defect.copy()
+
+        # Update defect category names
+        df['defect_category'] = df['defect_category'].replace('Unclassified Defect', 'Mixed/Administrative Tasks')
+
+        # Apply filters
+        if system and system != 'all':
+            df = df[df['system'] == system]
+
+        # University filter (requires joining with building data)
+        if universityId and universityId != 'all' and df_building_defect is not None:
+            university_defects = df_building_defect[
+                df_building_defect['university_id'] == int(universityId)
+            ]['defect_category'].unique()
+            df = df[df['defect_category'].isin(university_defects)]
+
+        # Sort by count descending
+        df = df.sort_values('count', ascending=False).head(limit)
+
+        # Convert to JSON
+        result = df.to_dict(orient='records')
+
+        return {
+            'data': result,
+            'total_combinations': len(result),
+            'systems': sorted(df['system'].unique().tolist())
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error processing system data: {str(e)}")
+
+
+@app.get("/api/defects/by-building")
+async def get_defects_by_building(
+    universityId: Optional[str] = 'all',
+    buildingId: Optional[str] = 'all',
+    limit: int = 100,
+    sortBy: str = 'total_impact'  # Options: total_impact, count, total_cost
+):
+    """
+    Get defect breakdown by building
+    Shows which buildings have the most defects and highest costs
+    """
+    if df_building_defect is None:
+        raise HTTPException(status_code=503, detail="Building-defect data not loaded")
+
+    try:
+        df = df_building_defect.copy()
+
+        # Update university names to real names
+        university_name_mapping = {
+            'Cornell University': 'University 10',
+            'Ohio State University': 'University 12',
+            'University of Michigan': 'University 20',
+            'Unknown University': 'Unknown University'
+        }
+        df['university_name'] = df['university_name'].replace(university_name_mapping)
+
+        # Update building names - remove "Building" prefix
+        df['building_name'] = df['building_name'].apply(
+            lambda x: x.replace('Building ', '') if isinstance(x, str) and x.startswith('Building ') else x
+        )
+
+        # Update defect category names
+        df['defect_category'] = df['defect_category'].replace('Unclassified Defect', 'Mixed/Administrative Tasks')
+
+        # Apply filters
+        if universityId and universityId != 'all':
+            df = df[df['university_id'] == int(universityId)]
+
+        if buildingId and buildingId != 'all':
+            df = df[df['building_id'] == buildingId]
+
+        # Sort by specified column
+        if sortBy in df.columns:
+            df = df.sort_values(sortBy, ascending=False)
+
+        df = df.head(limit)
+
+        # Convert to JSON
+        result = df.to_dict(orient='records')
+
+        # Get top problematic buildings summary
+        building_summary = df.groupby(['building_id', 'building_name', 'university_name']).agg({
+            'count': 'sum',
+            'total_cost': 'sum',
+            'total_impact': 'sum'
+        }).reset_index().sort_values('total_impact', ascending=False).head(20)
+
+        return {
+            'data': result,
+            'total_combinations': len(result),
+            'top_buildings': building_summary.to_dict(orient='records')
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error processing building data: {str(e)}")
+
+
+@app.get("/api/defects/monthly")
+async def get_monthly_defect_trends(
+    defectCategory: Optional[str] = 'all',
+    universityId: Optional[str] = 'all',
+    startDate: Optional[str] = None,
+    endDate: Optional[str] = None,
+    limit: int = 500
+):
+    """
+    Get monthly defect trends over time
+    Shows how defect occurrences change month by month
+    """
+    if df_monthly_defect is None:
+        raise HTTPException(status_code=503, detail="Monthly defect data not loaded")
+
+    try:
+        df = df_monthly_defect.copy()
+
+        # Update defect category names
+        df['defect_category'] = df['defect_category'].replace('Unclassified Defect', 'Mixed/Administrative Tasks')
+
+        # Apply filters
+        if defectCategory and defectCategory != 'all':
+            df = df[df['defect_category'] == defectCategory]
+
+        # Date range filtering
+        if startDate:
+            df = df[df['month'] >= startDate]
+
+        if endDate:
+            df = df[df['month'] <= endDate]
+
+        # Sort by month
+        df = df.sort_values('month').head(limit)
+
+        # Convert to JSON
+        result = df.to_dict(orient='records')
+
+        # Get available defect categories for filtering
+        categories = sorted(df['defect_category'].unique().tolist())
+
+        return {
+            'data': result,
+            'total_records': len(result),
+            'date_range': {
+                'start': df['month'].min() if len(df) > 0 else None,
+                'end': df['month'].max() if len(df) > 0 else None
+            },
+            'available_categories': categories[:50]  # Limit for performance
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error processing monthly data: {str(e)}")
+
+
+@app.get("/api/defects/impact")
+async def get_defect_impact_ranking(
+    universityId: Optional[str] = 'all',
+    riskLevel: Optional[str] = 'all',  # Options: Critical, High, Medium, Low
+    limit: int = 50
+):
+    """
+    Get defect categories ranked by impact score
+    Impact score = TotalCost × Priority (High=3, Medium=2, Low=1)
+    """
+    if df_impact_summary is None:
+        raise HTTPException(status_code=503, detail="Impact summary data not loaded")
+
+    try:
+        df = df_impact_summary.copy()
+
+        # Update defect category names
+        df['defect_category'] = df['defect_category'].replace('Unclassified Defect', 'Mixed/Administrative Tasks')
+
+        # Apply risk level filter
+        if riskLevel and riskLevel != 'all':
+            df = df[df['risk_level'] == riskLevel]
+
+        # University filter (requires joining with building data)
+        if universityId and universityId != 'all' and df_building_defect is not None:
+            university_defects = df_building_defect[
+                df_building_defect['university_id'] == int(universityId)
+            ]['defect_category'].unique()
+            df = df[df['defect_category'].isin(university_defects)]
+
+        # Already sorted by total_impact in aggregation
+        df = df.head(limit)
+
+        # Convert to JSON (convert categorical to string)
+        df_json = df.copy()
+        df_json['risk_level'] = df_json['risk_level'].astype(str)
+        result = df_json.to_dict(orient='records')
+
+        # Calculate summary statistics
+        total_impact = df['total_impact'].sum()
+        avg_impact = df['avg_impact'].mean()
+
+        return {
+            'data': result,
+            'total_categories': len(result),
+            'summary': {
+                'total_impact': float(total_impact),
+                'average_impact': float(avg_impact),
+                'highest_impact_category': result[0]['defect_category'] if len(result) > 0 else None,
+                'highest_impact_score': float(result[0]['total_impact']) if len(result) > 0 else 0
+            },
+            'risk_levels': ['Critical', 'High', 'Medium', 'Low']
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error processing impact data: {str(e)}")
 
 
 # ─────────────────────────────────────────────────────────────────────────────

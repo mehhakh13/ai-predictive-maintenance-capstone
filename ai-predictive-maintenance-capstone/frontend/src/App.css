@@ -1440,6 +1440,18 @@ body {
   padding: 1.5rem;
 }
 
+/* Cost Analysis - 2 Column Layout */
+.cost-analysis-page .main-content {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.cost-analysis-page .content-left,
+.cost-analysis-page .content-right {
+  min-width: 0;
+}
 /* ============================================
    RESPONSIVE - COST ANALYSIS
    ============================================ */
