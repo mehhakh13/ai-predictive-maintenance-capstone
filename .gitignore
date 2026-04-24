@@ -62,3 +62,10 @@ logs/
 .streamlit/
 
 data/
+
+# Node
+node_modules/
+.vite/
+
+# EDA Charts (if these are generated, uncomment to ignore)
+# eda_charts/
