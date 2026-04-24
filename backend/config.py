@@ -43,4 +43,5 @@ COST_PER_UPM_EVENT = 500  # Estimated cost per UPM event in dollars
 CORS_ORIGINS = [
     "http://localhost:3000",
     "http://localhost:5173",
+    "http://localhost:5174",
 ]
