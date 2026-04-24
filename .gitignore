@@ -7,6 +7,7 @@ __pycache__/
 env/
 venv/
 ENV/
+shap_env/
 build/
 develop-eggs/
 dist/
