@@ -108,8 +108,8 @@ def calculate_defect_cost(row, topic_id):
     final_cost = base_cost * priority_multiplier * duration_multiplier * np.random.uniform(0.8, 1.2)
     return round(final_cost, 2)
 
-np.random.seed(42)
-df['TotalCost'] = df.apply(lambda row: calculate_defect_cost(row, row['topic_id']), axis=1)
+# Use real TotalCost from FMUCD data; fill missing with 0
+df['TotalCost'] = pd.to_numeric(df['TotalCost'], errors='coerce').fillna(0)
 
 # Add university names
 university_mapping = {10: 'University 10', 11: 'University 11', 12: 'University 12'}

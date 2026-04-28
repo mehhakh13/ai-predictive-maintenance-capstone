@@ -10,6 +10,8 @@ const SystemHeatmap = ({ data, onCellClick, metric = 'count' }) => {
     const defectTypeSet = new Set();
 
     data.forEach(item => {
+      if (!item.SystemDescription || !item.defect_type) return;
+
       const key = `${item.SystemDescription}|${item.defect_type}`;
 
       if (!matrix[key]) {
@@ -17,7 +19,7 @@ const SystemHeatmap = ({ data, onCellClick, metric = 'count' }) => {
       }
 
       matrix[key].count += 1;
-      matrix[key].cost += item.TotalCost;
+      matrix[key].cost += (item.TotalCost || 0);
       matrix[key].items.push(item);
 
       systemSet.add(item.SystemDescription);

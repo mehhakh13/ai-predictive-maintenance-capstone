@@ -30,19 +30,19 @@ app.add_middleware(
 )
 
 # Load model and data on startup
-MODEL_PATH = "/home/sradmin/ai-predictive-maintenance-capstone/models/xgboost_upm_predictor.pkl"
-DATA_PATH = "/home/sradmin/ai-predictive-maintenance-capstone/data/processed/system_month_data.csv"
-IMPORTANCE_PATH = "/home/sradmin/ai-predictive-maintenance-capstone/models/feature_importance.csv"
-DEFECT_DATA_PATH = "/home/sradmin/ai-predictive-maintenance-capstone/data/bertopic/df_with_topics_IMPROVED.parquet"
-TOPIC_INFO_PATH = "/home/sradmin/ai-predictive-maintenance-capstone/data/bertopic/topic_info_IMPROVED.csv"
+MODEL_PATH = PROJECT_ROOT / "models" / "xgboost_upm_predictor.pkl"
+DATA_PATH = PROJECT_ROOT / "data" / "processed" / "system_month_data.csv"
+IMPORTANCE_PATH = PROJECT_ROOT / "models" / "feature_importance.csv"
+DEFECT_DATA_PATH = PROJECT_ROOT / "data" / "bertopic" / "df_with_topics_IMPROVED.parquet"
+TOPIC_INFO_PATH = PROJECT_ROOT / "data" / "bertopic" / "topic_info_IMPROVED.csv"
 
 # Aggregated defect intelligence data paths
-AGG_DATA_DIR = "/home/sradmin/ai-predictive-maintenance-capstone/data/defect_intelligence/aggregated"
-DEFECT_SUMMARY_PATH = f"{AGG_DATA_DIR}/defect_summary.parquet"
-SYSTEM_DEFECT_PATH = f"{AGG_DATA_DIR}/system_defect.parquet"
-BUILDING_DEFECT_PATH = f"{AGG_DATA_DIR}/building_defect.parquet"
-MONTHLY_DEFECT_PATH = f"{AGG_DATA_DIR}/monthly_defect.parquet"
-IMPACT_SUMMARY_PATH = f"{AGG_DATA_DIR}/impact_summary.parquet"
+AGG_DATA_DIR = PROJECT_ROOT / "data" / "defect_intelligence" / "aggregated"
+DEFECT_SUMMARY_PATH = AGG_DATA_DIR / "defect_summary.parquet"
+SYSTEM_DEFECT_PATH = AGG_DATA_DIR / "system_defect.parquet"
+BUILDING_DEFECT_PATH = AGG_DATA_DIR / "building_defect.parquet"
+MONTHLY_DEFECT_PATH = AGG_DATA_DIR / "monthly_defect.parquet"
+IMPACT_SUMMARY_PATH = AGG_DATA_DIR / "impact_summary.parquet"
 
 model = None
 df_data = None
@@ -82,21 +82,27 @@ async def load_model_and_data():
     global shap_df, shap_buildings_meta, shap_feature_cols
     global df_risk_building, df_risk_university, df_risk_university_yearly, risk_heatmap_meta
 
+    # Model (optional — fails gracefully if xgboost not installed)
     try:
-        # Load critical data first (fast startup)
         if os.path.exists(MODEL_PATH):
             model = joblib.load(MODEL_PATH)
             print("✓ Model loaded")
-
-        if os.path.exists(DATA_PATH):
-            df_data = pd.read_csv(DATA_PATH)
-            print(f"✓ Data loaded: {len(df_data)} records")
-
         if os.path.exists(IMPORTANCE_PATH):
             feature_importance = pd.read_csv(IMPORTANCE_PATH)
             print("✓ Feature importance loaded")
+    except Exception as e:
+        print(f"Warning: model not loaded: {e}")
 
-        # Load aggregated data (small, fast)
+    # Processed data (loaded independently of model)
+    try:
+        if os.path.exists(DATA_PATH):
+            df_data = pd.read_csv(DATA_PATH)
+            print(f"✓ Data loaded: {len(df_data)} records")
+    except Exception as e:
+        print(f"Warning: processed data not loaded: {e}")
+
+    # Aggregated defect intelligence data (small parquets, fast)
+    try:
         if os.path.exists(DEFECT_SUMMARY_PATH):
             df_defect_summary = pd.read_parquet(DEFECT_SUMMARY_PATH)
             print(f"✓ Defect summary loaded: {len(df_defect_summary)} categories")
@@ -117,11 +123,9 @@ async def load_model_and_data():
             df_impact_summary = pd.read_parquet(IMPACT_SUMMARY_PATH)
             print(f"✓ Impact summary loaded: {len(df_impact_summary)} categories")
 
-        # Load large defect data in background (lazy loading)
         print("✓ Server ready - defect data will load on first request")
-
     except Exception as e:
-        print(f"Error loading model/data: {e}")
+        print(f"Error loading aggregated defect data: {e}")
 
     # Load Risk Heatmap data from FMUCD CSV (has SubsystemDescription + BuildingName)
     try:
@@ -690,14 +694,16 @@ async def get_defect_intelligence(
             lambda tid: create_defect_label(topic_to_name.get(tid, f'topic_{tid}'), tid)
         )
 
-        # Generate synthetic costs (DMC field in raw data is empty, so we estimate based on defect type)
-        # Cost calculation uses: defect complexity, priority, and duration from real work orders
-        np.random.seed(42)  # For reproducibility
-        df['TotalCost'] = df.apply(lambda row: calculate_defect_cost(row, row['topic_id']), axis=1)
+        # Use real TotalCost from FMUCD; fill missing with 0
+        df['TotalCost'] = pd.to_numeric(df.get('TotalCost'), errors='coerce').fillna(0)
 
-        # Create university names
-        university_mapping = {10: 'University 10', 11: 'University 11', 12: 'University 12'}
-        df['UniversityName'] = df['UniversityID'].map(university_mapping).fillna('Unknown University')
+        # University names — use existing column if present, else derive from actual data
+        if 'university_name' in df.columns:
+            df['UniversityName'] = df['university_name']
+        else:
+            univ_ids = sorted(df['UniversityID'].dropna().unique().astype(int).tolist())
+            university_mapping = {uid: f'University {uid}' for uid in univ_ids}
+            df['UniversityName'] = df['UniversityID'].map(university_mapping).fillna('Unknown University')
 
         # Create building names (using BuildingID if available)
         df['BuildingName'] = df['BuildingID'].apply(
@@ -734,17 +740,15 @@ async def get_defect_intelligence(
         # Sort by date (newest first) and limit
         df = df.sort_values('WOStartDate', ascending=False).head(limit)
 
-        # Prepare metadata (from full dataset for filter options)
-        universities = [
-            {'id': int(uid), 'name': name}
-            for uid, name in university_mapping.items()
-        ]
+        # Metadata from full dataset
+        univ_ids = sorted(df_defects['UniversityID'].dropna().unique().astype(int).tolist())
+        universities = [{'id': uid, 'name': f'University {uid}'} for uid in univ_ids]
 
-        buildings = df_defects['BuildingID'].dropna().unique()
+        buildings = df_defects[df_defects['BuildingID'] != 'nan']['BuildingID'].unique()
         buildings = [
             {'id': str(bid), 'name': str(bid)}
-            for bid in buildings if bid != 'nan'
-        ][:50]  # Limit to 50 buildings
+            for bid in buildings
+        ][:50]
 
         all_defect_types = df_defects['topic_id'].map(
             lambda tid: create_defect_label(topic_to_name.get(tid, f'topic_{tid}'), tid)
@@ -756,8 +760,8 @@ async def get_defect_intelligence(
         data = []
         for _, row in df.iterrows():
             data.append({
-                'WOId': row.get('WOId', 'N/A'),
-                'WODescription': row['WODescription'][:200] if pd.notna(row['WODescription']) else 'N/A',
+                'WOId': str(row.get('WOId', 'N/A')),
+                'WODescription': row['WODescription'][:200] if pd.notna(row.get('WODescription')) else 'N/A',
                 'defect_type': row['defect_type'],
                 'SystemDescription': row['SystemDescription'],
                 'BuildingID': str(row['BuildingID']) if pd.notna(row['BuildingID']) else None,
@@ -766,7 +770,7 @@ async def get_defect_intelligence(
                 'BuildingName': row['BuildingName'],
                 'TotalCost': float(row['TotalCost']),
                 'WOStartDate': str(row['WOStartDate'])[:10],
-                'WOPriority': str(row['WOPriority']) if pd.notna(row['WOPriority']) else None,
+                'WOPriority': str(row['WOPriority']) if pd.notna(row.get('WOPriority')) else None,
                 'Status': row['Status'],
                 'topic_id': int(row['topic_id'])
             })

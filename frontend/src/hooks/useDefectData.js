@@ -98,7 +98,9 @@ export const useDefectData = (filters = {}) => {
       defectCosts[item.defect_type] = (defectCosts[item.defect_type] || 0) + item.TotalCost;
 
       // System counts
-      systemCounts[item.SystemDescription] = (systemCounts[item.SystemDescription] || 0) + 1;
+      if (item.SystemDescription) {
+        systemCounts[item.SystemDescription] = (systemCounts[item.SystemDescription] || 0) + 1;
+      }
     });
 
     // Find most frequent defect
@@ -108,7 +110,8 @@ export const useDefectData = (filters = {}) => {
     const highestCost = Object.entries(defectCosts).sort((a, b) => b[1] - a[1])[0];
 
     // Find most affected system
-    const mostAffected = Object.entries(systemCounts).sort((a, b) => b[1] - a[1])[0];
+    const systemEntries = Object.entries(systemCounts).sort((a, b) => b[1] - a[1]);
+    const mostAffected = systemEntries[0] || ['N/A', 0];
 
     // Total cost
     const totalCost = rawData.reduce((sum, item) => sum + item.TotalCost, 0);
