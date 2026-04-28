@@ -30,19 +30,19 @@ app.add_middleware(
 )
 
 # Load model and data on startup
-MODEL_PATH = "/home/sradmin/ai-predictive-maintenance-capstone/models/xgboost_upm_predictor.pkl"
-DATA_PATH = "/home/sradmin/ai-predictive-maintenance-capstone/data/processed/system_month_data.csv"
-IMPORTANCE_PATH = "/home/sradmin/ai-predictive-maintenance-capstone/models/feature_importance.csv"
-DEFECT_DATA_PATH = "/home/sradmin/ai-predictive-maintenance-capstone/data/bertopic/df_with_topics_IMPROVED.parquet"
-TOPIC_INFO_PATH = "/home/sradmin/ai-predictive-maintenance-capstone/data/bertopic/topic_info_IMPROVED.csv"
+MODEL_PATH = str(PROJECT_ROOT / "models" / "xgboost_upm_predictor.pkl")
+DATA_PATH = str(PROJECT_ROOT / "data" / "processed" / "system_month_data.csv")
+IMPORTANCE_PATH = str(PROJECT_ROOT / "models" / "feature_importance.csv")
+DEFECT_DATA_PATH = str(PROJECT_ROOT / "data" / "defect_intelligence" / "aggregated" / "df_defects_raw.parquet")
+TOPIC_INFO_PATH = str(PROJECT_ROOT / "data" / "defect_intelligence" / "aggregated" / "topic_info.csv")
 
 # Aggregated defect intelligence data paths
-AGG_DATA_DIR = "/home/sradmin/ai-predictive-maintenance-capstone/data/defect_intelligence/aggregated"
-DEFECT_SUMMARY_PATH = f"{AGG_DATA_DIR}/defect_summary.parquet"
-SYSTEM_DEFECT_PATH = f"{AGG_DATA_DIR}/system_defect.parquet"
-BUILDING_DEFECT_PATH = f"{AGG_DATA_DIR}/building_defect.parquet"
-MONTHLY_DEFECT_PATH = f"{AGG_DATA_DIR}/monthly_defect.parquet"
-IMPACT_SUMMARY_PATH = f"{AGG_DATA_DIR}/impact_summary.parquet"
+AGG_DATA_DIR = PROJECT_ROOT / "data" / "defect_intelligence" / "aggregated"
+DEFECT_SUMMARY_PATH = str(AGG_DATA_DIR / "defect_summary.parquet")
+SYSTEM_DEFECT_PATH = str(AGG_DATA_DIR / "system_defect.parquet")
+BUILDING_DEFECT_PATH = str(AGG_DATA_DIR / "building_defect.parquet")
+MONTHLY_DEFECT_PATH = str(AGG_DATA_DIR / "monthly_defect.parquet")
+IMPACT_SUMMARY_PATH = str(AGG_DATA_DIR / "impact_summary.parquet")
 
 model = None
 df_data = None
@@ -485,11 +485,15 @@ async def get_feature_importance():
 # ============================================
 
 def create_defect_label(topic_name: str, topic_id: int) -> str:
-    """Convert BERTopic topic name to human-readable defect label"""
+    """Convert topic name to human-readable defect label"""
     if topic_id == -1:
         return "Mixed/Administrative Tasks"
 
-    # Mapping of topic keywords to readable labels
+    # If the topic name is already a clean system description (no BERTopic underscores), use it directly
+    if topic_name and '_' not in topic_name and not topic_name.startswith('topic_'):
+        return topic_name
+
+    # Mapping of topic keywords to readable labels (BERTopic format fallback)
     keyword_mappings = {
         'light': 'Lighting System Failure',
         'cold': 'HVAC Temperature Control',
@@ -684,31 +688,35 @@ async def get_defect_intelligence(
         # Create a copy for filtering
         df = df_defects.copy()
 
-        # Create defect type labels
+        # Create defect type labels (topic_info maps topic_id -> SystemDescription name)
         topic_to_name = dict(zip(topic_info['Topic'], topic_info['Name']))
         df['defect_type'] = df['topic_id'].apply(
             lambda tid: create_defect_label(topic_to_name.get(tid, f'topic_{tid}'), tid)
         )
 
-        # Generate synthetic costs (DMC field in raw data is empty, so we estimate based on defect type)
-        # Cost calculation uses: defect complexity, priority, and duration from real work orders
-        np.random.seed(42)  # For reproducibility
-        df['TotalCost'] = df.apply(lambda row: calculate_defect_cost(row, row['topic_id']), axis=1)
+        # TotalCost already present in parquet; only compute if missing
+        if 'TotalCost' not in df.columns:
+            np.random.seed(42)
+            df['TotalCost'] = df.apply(lambda row: calculate_defect_cost(row, row['topic_id']), axis=1)
 
-        # Create university names
-        university_mapping = {10: 'University 10', 11: 'University 11', 12: 'University 12'}
-        df['UniversityName'] = df['UniversityID'].map(university_mapping).fillna('Unknown University')
+        # University names — use existing column if present, else map
+        if 'university_name' in df.columns:
+            df['UniversityName'] = df['university_name']
+        else:
+            university_mapping = {2: 'University 2', 3: 'University 3', 5: 'University 5',
+                                   6: 'University 6', 8: 'University 8', 9: 'University 9',
+                                   10: 'University 10', 11: 'University 11', 12: 'University 12'}
+            df['UniversityName'] = df['UniversityID'].map(university_mapping).fillna('Unknown University')
 
-        # Create building names (using BuildingID if available)
+        # Building names
         df['BuildingName'] = df['BuildingID'].apply(
-            lambda bid: str(bid) if pd.notna(bid) and bid != 'nan' else 'Unknown'
+            lambda bid: str(bid) if pd.notna(bid) and str(bid) != 'nan' else 'Unknown'
         )
 
-        # Add synthetic status
-        statuses = ['Completed', 'Completed', 'Completed', 'In Progress']  # 75% completed
+        # Synthetic status
+        statuses = ['Completed', 'Completed', 'Completed', 'In Progress']
         df['Status'] = [statuses[i % len(statuses)] for i in range(len(df))]
 
-        # Add WOId if not present
         if 'WOId' not in df.columns:
             df['WOId'] = [f'WO-{str(i+1).zfill(6)}' for i in range(len(df))]
 
@@ -734,17 +742,15 @@ async def get_defect_intelligence(
         # Sort by date (newest first) and limit
         df = df.sort_values('WOStartDate', ascending=False).head(limit)
 
-        # Prepare metadata (from full dataset for filter options)
-        universities = [
-            {'id': int(uid), 'name': name}
-            for uid, name in university_mapping.items()
-        ]
+        # Metadata from full dataset
+        univ_ids = sorted(df_defects['UniversityID'].dropna().unique().astype(int).tolist())
+        universities = [{'id': uid, 'name': f'University {uid}'} for uid in univ_ids]
 
         buildings = df_defects['BuildingID'].dropna().unique()
         buildings = [
             {'id': str(bid), 'name': str(bid)}
-            for bid in buildings if bid != 'nan'
-        ][:50]  # Limit to 50 buildings
+            for bid in buildings if str(bid) != 'nan'
+        ][:50]
 
         all_defect_types = df_defects['topic_id'].map(
             lambda tid: create_defect_label(topic_to_name.get(tid, f'topic_{tid}'), tid)
@@ -756,8 +762,8 @@ async def get_defect_intelligence(
         data = []
         for _, row in df.iterrows():
             data.append({
-                'WOId': row.get('WOId', 'N/A'),
-                'WODescription': row['WODescription'][:200] if pd.notna(row['WODescription']) else 'N/A',
+                'WOId': str(row.get('WOId', 'N/A')),
+                'WODescription': row['WODescription'][:200] if pd.notna(row.get('WODescription')) else 'N/A',
                 'defect_type': row['defect_type'],
                 'SystemDescription': row['SystemDescription'],
                 'BuildingID': str(row['BuildingID']) if pd.notna(row['BuildingID']) else None,
@@ -766,7 +772,7 @@ async def get_defect_intelligence(
                 'BuildingName': row['BuildingName'],
                 'TotalCost': float(row['TotalCost']),
                 'WOStartDate': str(row['WOStartDate'])[:10],
-                'WOPriority': str(row['WOPriority']) if pd.notna(row['WOPriority']) else None,
+                'WOPriority': str(row['WOPriority']) if pd.notna(row.get('WOPriority')) else None,
                 'Status': row['Status'],
                 'topic_id': int(row['topic_id'])
             })
@@ -910,6 +916,9 @@ async def get_defects_by_building(
 
         # Update defect category names
         df['defect_category'] = df['defect_category'].replace('Unclassified Defect', 'Mixed/Administrative Tasks')
+
+        # Exclude rows with no valid building ID
+        df = df[df['building_id'].notna() & (df['building_id'].astype(str) != 'nan')]
 
         # Apply filters
         if universityId and universityId != 'all':
