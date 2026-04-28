@@ -1,7 +1,6 @@
 import React, { useMemo, useState } from 'react';
-import { formatCompactNumber } from '../../utils/format';
 
-const SystemHeatmap = ({ data, onCellClick, metric = 'count' }) => {
+const SystemHeatmap = ({ data, onCellClick }) => {
   const [hoveredCell, setHoveredCell] = useState(null);
 
   const { heatmapData, systems, defectTypes, maxValue } = useMemo(() => {
@@ -10,14 +9,15 @@ const SystemHeatmap = ({ data, onCellClick, metric = 'count' }) => {
     const defectTypeSet = new Set();
 
     data.forEach(item => {
+      if (!item.SystemDescription || !item.defect_type) return;
+
       const key = `${item.SystemDescription}|${item.defect_type}`;
 
       if (!matrix[key]) {
-        matrix[key] = { count: 0, cost: 0, items: [] };
+        matrix[key] = { count: 0, items: [] };
       }
 
       matrix[key].count += 1;
-      matrix[key].cost += item.TotalCost;
       matrix[key].items.push(item);
 
       systemSet.add(item.SystemDescription);
@@ -26,18 +26,14 @@ const SystemHeatmap = ({ data, onCellClick, metric = 'count' }) => {
 
     const systems = Array.from(systemSet).sort();
     const defectTypes = Array.from(defectTypeSet).sort();
-
-    // Find max value for color scaling
-    const values = Object.values(matrix).map(v => metric === 'count' ? v.count : v.cost);
-    const maxValue = Math.max(...values, 1);
+    const maxValue = Math.max(...Object.values(matrix).map(v => v.count), 1);
 
     return { heatmapData: matrix, systems, defectTypes, maxValue };
-  }, [data, metric]);
+  }, [data]);
 
   const getCellValue = (system, defectType) => {
     const key = `${system}|${defectType}`;
-    const cell = heatmapData[key];
-    return cell ? (metric === 'count' ? cell.count : cell.cost) : 0;
+    return heatmapData[key]?.count ?? 0;
   };
 
   const getCellColor = (value) => {
@@ -56,13 +52,7 @@ const SystemHeatmap = ({ data, onCellClick, metric = 'count' }) => {
     const cellData = heatmapData[key];
 
     if (cellData && onCellClick) {
-      onCellClick({
-        system,
-        defectType,
-        count: cellData.count,
-        cost: cellData.cost,
-        items: cellData.items
-      });
+      onCellClick({ system, defectType, count: cellData.count, items: cellData.items });
     }
   };
 
@@ -102,7 +92,7 @@ const SystemHeatmap = ({ data, onCellClick, metric = 'count' }) => {
                     >
                       {value > 0 && (
                         <span className="heatmap-cell-value">
-                          {metric === 'count' ? value : formatCompactNumber(value)}
+                          {value}
                         </span>
                       )}
 
@@ -110,8 +100,7 @@ const SystemHeatmap = ({ data, onCellClick, metric = 'count' }) => {
                         <div className="heatmap-tooltip">
                           <div><strong>{system}</strong></div>
                           <div><strong>{defectType}</strong></div>
-                          <div>Count: {heatmapData[cellKey].count}</div>
-                          <div>Cost: ${formatCompactNumber(heatmapData[cellKey].cost)}</div>
+                          <div>Count: {value}</div>
                         </div>
                       )}
                     </div>
@@ -125,9 +114,7 @@ const SystemHeatmap = ({ data, onCellClick, metric = 'count' }) => {
 
       {/* Legend */}
       <div className="heatmap-legend">
-        <div className="legend-title">
-          {metric === 'count' ? 'Defect Count' : 'Total Cost'}
-        </div>
+        <div className="legend-title">Defect Count</div>
         <div className="legend-gradient">
           <div className="legend-color" style={{ backgroundColor: '#eab308' }}></div>
           <div className="legend-color" style={{ backgroundColor: '#f59e0b' }}></div>

@@ -1,12 +1,10 @@
 import React, { useState } from 'react';
-import { AlertCircle, TrendingUp, DollarSign, Wrench } from 'lucide-react';
+import { AlertCircle, TrendingUp, Wrench, Hash } from 'lucide-react';
 import { useDefectData } from '../hooks/useDefectData';
 import useAggregatedDefectData from '../hooks/useAggregatedDefectData';
-import { formatCurrency, formatCompactNumber } from '../utils/format';
 import KpiCard from '../components/KpiCard';
 import FiltersBar from '../components/DefectIntelligence/FiltersBar';
 import DefectBarChart from '../components/DefectIntelligence/DefectBarChart';
-import CostBarChart from '../components/DefectIntelligence/CostBarChart';
 import SystemHeatmap from '../components/DefectIntelligence/SystemHeatmap';
 import DefectTable from '../components/DefectIntelligence/DefectTable';
 import ImpactRanking from '../components/DefectIntelligence/ImpactRanking';
@@ -23,7 +21,6 @@ const DefectIntelligence = () => {
     endDate: ''
   });
 
-  const [heatmapMetric, setHeatmapMetric] = useState('count');
   const [selectedCell, setSelectedCell] = useState(null);
 
   const { data, summary, metadata, loading, error } = useDefectData(filters);
@@ -61,18 +58,10 @@ const DefectIntelligence = () => {
     setFilters(prev => ({ ...prev, buildingId }));
   };
 
-  if (loading || aggLoading) {
+  if (error) {
     return (
       <div className="page-container">
-        <div className="loading-spinner">Loading defect intelligence data...</div>
-      </div>
-    );
-  }
-
-  if (error || aggError) {
-    return (
-      <div className="page-container">
-        <div className="error-message">Error: {error || aggError}</div>
+        <div className="error-message">Error loading defect data: {error}</div>
       </div>
     );
   }
@@ -109,28 +98,25 @@ const DefectIntelligence = () => {
           subtitle={`${summary.mostFrequentDefect.count} occurrences`}
         />
         <KpiCard
-          title="Highest Cost Defect"
-          value={summary.highestCostDefect.name}
-          icon={DollarSign}
-          subtitle={formatCurrency(summary.highestCostDefect.cost)}
-        />
-        <KpiCard
           title="Most Affected System"
           value={summary.mostAffectedSystem.name}
           icon={Wrench}
           subtitle={`${summary.mostAffectedSystem.count} defects`}
         />
+        <KpiCard
+          title="Defect Types Found"
+          value={summary.uniqueDefectTypes}
+          icon={Hash}
+          subtitle="Distinct categories"
+        />
       </div>
 
       {/* Charts Section */}
       <div className="charts-section">
-        <div className="charts-grid">
-          <div className="section-card">
-            <DefectBarChart data={data} onBarClick={handleBarClick} />
-          </div>
-          <div className="section-card">
-            <CostBarChart data={data} onBarClick={handleBarClick} />
-          </div>
+        <div className="section-card">
+          {loading
+            ? <div className="loading-spinner">Loading defect data...</div>
+            : <DefectBarChart data={data} onBarClick={handleBarClick} />}
         </div>
       </div>
 
@@ -138,53 +124,35 @@ const DefectIntelligence = () => {
       <div className="insights-section">
         <div className="insights-grid">
           <div className="section-card">
-            <ImpactRanking
-              data={aggData.impactRanking}
-              onDefectClick={handleDefectClick}
-            />
+            {aggLoading
+              ? <div className="loading-spinner">Loading rankings...</div>
+              : <ImpactRanking data={aggData.impactRanking} onDefectClick={handleDefectClick} />}
           </div>
           <div className="section-card">
-            <BuildingRiskView
-              data={aggData.buildingDefects}
-              onBuildingClick={handleBuildingClick}
-            />
+            {aggLoading
+              ? <div className="loading-spinner">Loading buildings...</div>
+              : <BuildingRiskView data={aggData.buildingDefects} onBuildingClick={handleBuildingClick} />}
           </div>
         </div>
       </div>
 
       {/* Monthly Trends */}
       <div className="section-card trends-section">
-        <MonthlyTrendsChart
-          data={aggData.monthlyTrends}
-          selectedCategories={filters.defectType !== 'all' ? [filters.defectType] : []}
-        />
+        {aggLoading
+          ? <div className="loading-spinner">Loading trends...</div>
+          : <MonthlyTrendsChart
+              data={aggData.monthlyTrends}
+              selectedCategories={filters.defectType !== 'all' ? [filters.defectType] : []}
+            />}
       </div>
 
       {/* Heatmap Section */}
       <div className="section-card heatmap-section">
         <div className="heatmap-header">
           <h3>System × Defect Analysis</h3>
-          <div className="heatmap-controls">
-            <label>Metric:</label>
-            <div className="toggle-buttons">
-              <button
-                className={heatmapMetric === 'count' ? 'active' : ''}
-                onClick={() => setHeatmapMetric('count')}
-              >
-                Count
-              </button>
-              <button
-                className={heatmapMetric === 'cost' ? 'active' : ''}
-                onClick={() => setHeatmapMetric('cost')}
-              >
-                Cost
-              </button>
-            </div>
-          </div>
         </div>
         <SystemHeatmap
           data={data}
-          metric={heatmapMetric}
           onCellClick={handleHeatmapCellClick}
         />
         {selectedCell && (
@@ -192,8 +160,6 @@ const DefectIntelligence = () => {
             <strong>Selected:</strong> {selectedCell.system} × {selectedCell.defectType}
             {' | '}
             Count: {selectedCell.count}
-            {' | '}
-            Cost: {formatCurrency(selectedCell.cost)}
           </div>
         )}
       </div>
