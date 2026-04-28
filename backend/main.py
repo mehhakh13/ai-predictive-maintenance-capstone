@@ -62,6 +62,12 @@ shap_df = None
 shap_buildings_meta = None
 shap_feature_cols = None
 
+# Risk Heatmap globals
+df_risk_building = None           # all-years avg: (uni, bld, sys, subsys, month)
+df_risk_university = None         # all-years avg: (uni, sys, subsys, month)
+df_risk_university_yearly = None  # per-year:      (uni, sys, subsys, month, year)
+risk_heatmap_meta = None          # metadata dict
+
 SHAP_MODEL_PATH = PROJECT_ROOT / "models" / "shap_model.pkl"
 SHAP_DATA_PATH = PROJECT_ROOT / "data" / "shap" / "shap_values.parquet"
 SHAP_META_PATH = PROJECT_ROOT / "data" / "shap" / "buildings_meta.json"
@@ -74,6 +80,7 @@ async def load_model_and_data():
     global model, df_data, feature_importance, df_defects, topic_info
     global df_defect_summary, df_system_defect, df_building_defect, df_monthly_defect, df_impact_summary
     global shap_df, shap_buildings_meta, shap_feature_cols
+    global df_risk_building, df_risk_university, df_risk_university_yearly, risk_heatmap_meta
 
     try:
         # Load critical data first (fast startup)
@@ -115,6 +122,93 @@ async def load_model_and_data():
 
     except Exception as e:
         print(f"Error loading model/data: {e}")
+
+    # Load Risk Heatmap data from FMUCD CSV (has SubsystemDescription + BuildingName)
+    try:
+        fmucd_csv = PROJECT_ROOT / "data" / "Facility Management Unified Classification Database (FMUCD).csv"
+        if fmucd_csv.exists():
+            print("Loading FMUCD CSV for risk heatmap (this takes ~10s)...")
+            raw = pd.read_csv(
+                fmucd_csv,
+                usecols=['UniversityID', 'BuildingID', 'BuildingName',
+                         'SystemDescription', 'SubsystemDescription',
+                         'WOStartDate', 'PPM/UPM'],
+                low_memory=False
+            )
+
+            # Keep only rows with valid building IDs and known work order types
+            raw = raw[
+                raw['BuildingID'].notna() &
+                raw['PPM/UPM'].isin(['UPM', 'PPM'])
+            ].copy()
+
+            # Fill missing building names with the building ID so groupby doesn't drop them
+            raw['BuildingName'] = raw['BuildingName'].fillna(raw['BuildingID'])
+
+            # Extract month and year
+            dt = pd.to_datetime(raw['WOStartDate'], errors='coerce')
+            raw['month'] = dt.dt.month
+            raw['year'] = dt.dt.year
+            raw = raw.dropna(subset=['month', 'year'])
+            raw['month'] = raw['month'].astype(int)
+            raw['year'] = raw['year'].astype(int)
+            raw['is_upm'] = (raw['PPM/UPM'] == 'UPM').astype(int)
+
+            def _agg(grp):
+                g = grp.agg(coverage=('is_upm', 'count'), upm_count=('is_upm', 'sum')).reset_index()
+                g['ml_risk'] = (g['upm_count'] / g['coverage']).round(4)
+                return g.drop(columns='upm_count')
+
+            # Building-level all-years avg: (uni, bld, sys, subsys, month)
+            df_risk_building = _agg(raw.groupby(
+                ['UniversityID', 'BuildingID', 'BuildingName',
+                 'SystemDescription', 'SubsystemDescription', 'month'],
+                observed=True
+            ))
+
+            # University-level all-years avg: (uni, sys, subsys, month)
+            df_risk_university = _agg(raw.groupby(
+                ['UniversityID', 'SystemDescription', 'SubsystemDescription', 'month'],
+                observed=True
+            ))
+
+            # University-level per-year: (uni, sys, subsys, month, year)
+            df_risk_university_yearly = _agg(raw.groupby(
+                ['UniversityID', 'SystemDescription', 'SubsystemDescription', 'month', 'year'],
+                observed=True
+            ))
+
+            # Metadata
+            universities = [int(u) for u in sorted(raw['UniversityID'].unique())]
+            bld_names = raw[['BuildingID', 'BuildingName']].drop_duplicates('BuildingID')
+            bld_names = bld_names[bld_names['BuildingID'].notna() & bld_names['BuildingName'].notna()]
+            name_lookup = {
+                str(row.BuildingID): str(row.BuildingName)
+                for row in bld_names.itertuples(index=False)
+            }
+            buildings_by_uni = (
+                raw[raw['BuildingID'].notna()]
+                .groupby('UniversityID')['BuildingID']
+                .apply(lambda x: sorted([str(b) for b in x.unique()]))
+                .to_dict()
+            )
+            years_by_uni = (
+                raw.groupby('UniversityID')['year']
+                .apply(lambda x: sorted(x.unique().tolist()))
+                .to_dict()
+            )
+            risk_heatmap_meta = {
+                "universities": universities,
+                "buildings_by_university": {str(int(u)): v for u, v in buildings_by_uni.items()},
+                "building_names": name_lookup,
+                "years_by_university": {str(int(u)): v for u, v in years_by_uni.items()},
+            }
+            print(f"✓ Risk heatmap loaded from FMUCD CSV: {len(df_risk_building):,} building rows, "
+                  f"{len(df_risk_university):,} university rows, {len(universities)} universities")
+        else:
+            print("⚠ Risk heatmap: FMUCD CSV not found")
+    except Exception as e:
+        print(f"Warning: Risk heatmap data not loaded — {e}")
 
     # Load SHAP artifacts
     try:
@@ -1136,6 +1230,86 @@ async def get_shap_explanation(
         'month': month,
         'subsystems': subsystems,
     }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Risk Heatmap Endpoints
+# ─────────────────────────────────────────────────────────────────────────────
+
+@app.get("/api/risk-heatmap/metadata")
+async def get_risk_heatmap_metadata():
+    """Universities, buildings list, and building names for filter dropdowns."""
+    if risk_heatmap_meta is None:
+        raise HTTPException(status_code=503, detail="Risk heatmap data not loaded")
+    return risk_heatmap_meta
+
+
+@app.get("/api/risk-heatmap/university")
+async def get_university_risk_heatmap(universityId: int = 10, year: Optional[int] = None):
+    """
+    University-level heatmap: system × month for the given university.
+    Pass year= to get a specific year's data; omit for all-years historical average.
+    """
+    if df_risk_university is None:
+        raise HTTPException(status_code=503, detail="Risk heatmap data not loaded")
+
+    if year is not None and df_risk_university_yearly is not None:
+        subset = df_risk_university_yearly[
+            (df_risk_university_yearly['UniversityID'] == universityId) &
+            (df_risk_university_yearly['year'] == year)
+        ]
+    else:
+        subset = df_risk_university[df_risk_university['UniversityID'] == universityId]
+
+    if subset.empty:
+        raise HTTPException(status_code=404, detail=f"No data for university {universityId}")
+
+    result = []
+    for row in subset.itertuples(index=False):
+        result.append({
+            "UniversityID": int(row.UniversityID),
+            "SystemDescription": row.SystemDescription,
+            "SubsystemDescription": row.SubsystemDescription,
+            "MonthNum": int(row.month),
+            "ml_risk": float(row.ml_risk),
+            "hist_asset_rate": float(row.ml_risk),
+            "hist_shock_rate": 0.0,
+            "coverage": int(row.coverage),
+        })
+    return result
+
+
+@app.get("/api/risk-heatmap/building")
+async def get_building_risk_heatmap(buildingId: str, universityId: int = 10):
+    """
+    Building-level heatmap: system × month for a single building.
+    Returns rows in the schema the frontend hook expects.
+    """
+    if df_risk_building is None:
+        raise HTTPException(status_code=503, detail="Risk heatmap data not loaded")
+
+    subset = df_risk_building[
+        (df_risk_building['BuildingID'] == buildingId) &
+        (df_risk_building['UniversityID'] == universityId)
+    ]
+    if subset.empty:
+        raise HTTPException(status_code=404, detail=f"No data for building {buildingId} in university {universityId}")
+
+    result = []
+    for row in subset.itertuples(index=False):
+        result.append({
+            "UniversityID": int(row.UniversityID),
+            "BuildingID": row.BuildingID,
+            "BuildingName": row.BuildingName,
+            "SystemDescription": row.SystemDescription,
+            "SubsystemDescription": row.SubsystemDescription,
+            "MonthNum": int(row.month),
+            "ml_risk": float(row.ml_risk),
+            "hist_asset_rate": float(row.ml_risk),
+            "hist_shock_rate": 0.0,
+            "coverage": int(row.coverage),
+        })
+    return result
 
 
 if __name__ == "__main__":
