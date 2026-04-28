@@ -105,17 +105,37 @@ export const useCostAnalysisData = (filters = {}) => {
       try {
         setLoading(true);
 
-        // TODO: Replace with actual API call when backend is ready
-        // const response = await fetch('/api/cost-analysis');
-        // const data = await response.json();
+        // Load from CSV file
+        const csvData = await loadCostDataFromCSV('/cost_data_sample.csv');
 
-        // For now, use mock data
-        const data = generateMockCostData();
-        setRawData(data);
+        // Map CSV columns to expected format
+        const mappedData = csvData.map(row => ({
+          WOId: row.WOID || row.WOId,
+          WOStartDate: row.WOStartDate,
+          SystemDescription: row.SystemDescription,
+          SubsystemDescription: row.SubsystemDescription,
+          MaintenanceType: row['PPM/UPM'] || row.MaintenanceType,
+          WOPriority: row.WOPriority,
+          UniversityID: row.UniversityID,
+          BuildingID: row.BuildingID,
+          LaborCost: parseFloat(row.LaborCost) || 0,
+          MaterialCost: parseFloat(row.MaterialCost) || 0,
+          OtherCost: parseFloat(row.OtherCost) || 0,
+          TotalCost: parseFloat(row.TotalCost) || 0,
+          State: row['State/Province'] || row.State,
+          Country: row.Country
+        }));
+
+        setRawData(mappedData);
         setError(null);
       } catch (err) {
         console.error('Error loading cost data:', err);
         setError(err.message);
+
+        // Fallback to mock data if CSV fails
+        console.warn('Falling back to mock data');
+        const data = generateMockCostData();
+        setRawData(data);
       } finally {
         setLoading(false);
       }
@@ -243,23 +263,56 @@ export const loadCostDataFromCSV = async (csvPath) => {
   }
 };
 
-// Simple CSV parser
+// Robust CSV parser that handles quoted fields and commas
 const parseCSV = (text) => {
   const lines = text.trim().split('\n');
-  const headers = lines[0].split(',');
+
+  // Parse CSV line respecting quotes
+  const parseLine = (line) => {
+    const result = [];
+    let current = '';
+    let inQuotes = false;
+
+    for (let i = 0; i < line.length; i++) {
+      const char = line[i];
+
+      if (char === '"') {
+        inQuotes = !inQuotes;
+      } else if (char === ',' && !inQuotes) {
+        result.push(current.trim());
+        current = '';
+      } else {
+        current += char;
+      }
+    }
+    result.push(current.trim());
+    return result;
+  };
+
+  const headers = parseLine(lines[0]);
 
   return lines.slice(1).map(line => {
-    const values = line.split(',');
+    if (!line.trim()) return null;
+
+    const values = parseLine(line);
     const obj = {};
+
     headers.forEach((header, index) => {
-      const value = values[index];
-      // Try to parse as number for cost fields
-      if (header.includes('Cost')) {
-        obj[header] = parseFloat(value) || 0;
+      const value = values[index] || '';
+      const trimmedValue = value.trim();
+
+      // Parse numbers for cost and numeric fields
+      if (header.includes('Cost') || header.includes('Hours') ||
+          header.includes('Temp') || header.includes('pressure') ||
+          header.includes('Humidity') || header.includes('Wind') ||
+          header.includes('Precipitation') || header.includes('Snow') ||
+          header.includes('Cloudness') || header.includes('UniversityID') ||
+          header.includes('BuildingID')) {
+        obj[header] = parseFloat(trimmedValue) || 0;
       } else {
-        obj[header] = isNaN(value) ? value : parseFloat(value);
+        obj[header] = trimmedValue;
       }
     });
     return obj;
-  });
+  }).filter(row => row !== null);
 };

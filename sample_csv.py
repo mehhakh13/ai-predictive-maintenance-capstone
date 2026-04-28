@@ -11,7 +11,7 @@ from pathlib import Path
 # ---- Paths ----
 BASE_DIR = Path(__file__).resolve().parent
 SOURCE_CSV = BASE_DIR / "data" / "USA_Premium_Universities_Cleaned.csv"
-OUTPUT_CSV = BASE_DIR / "ai-predictive-maintenance-capstone" / "frontend" / "public" / "cost_data_sample.csv"
+OUTPUT_CSV = BASE_DIR / "frontend" / "public" / "cost_data_sample.csv"
 
 # ---- Config ----
 SAMPLE_SIZE = 10000  # rows
