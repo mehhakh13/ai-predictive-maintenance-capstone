@@ -1,6 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-
-const API_BASE_URL = 'http://localhost:8000';
+import { API_BASE_URL } from '../config';
 
 export const useDefectData = (filters = {}) => {
   const [loading, setLoading] = useState(true);
