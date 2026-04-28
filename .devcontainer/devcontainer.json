@@ -40,12 +40,12 @@
     "5173": {
       "label": "Frontend (React)",
       "onAutoForward": "notify",
-      "protocol": "https"
+      "protocol": "http"
     },
     "8000": {
       "label": "Backend (FastAPI)",
       "onAutoForward": "notify",
-      "protocol": "https"
+      "protocol": "http"
     }
   },
 
