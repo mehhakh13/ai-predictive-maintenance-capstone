@@ -21,7 +21,7 @@ import {
   Card,
   CardContent,
   CircularProgress,
-  Alert,
+  Alert as MuiAlert,
   Divider,
   Badge,
   Stack
@@ -53,18 +53,39 @@ import {
   Assessment,
   EmojiObjects
 } from '@mui/icons-material';
+import Alert from '../components/Alert';
+import '../styles/theme.css';
 
-// Professional Color Palette
+// Faculty Manager UX Color System
+// 🔴 Red → Immediate action required
+// 🟠 Amber → Urgent, plan this week
+// 🔵 Blue → Monitor, schedule proactively
+// 🟢 Green → OK / no action needed
 const COLORS = {
-  primary: '#1565C0',
-  secondary: '#0277BD',
-  success: '#2E7D32',
-  warning: '#F57C00',
-  error: '#C62828',
-  info: '#0288D1',
-  gradient: ['#1565C0', '#1976D2', '#1E88E5', '#42A5F5', '#64B5F6', '#90CAF9'],
-  severity: ['#C62828', '#D32F2F', '#F44336', '#EF5350', '#E57373'],
-  neutral: '#546E7A'
+  critical: '#DC2626',     // Red
+  urgent: '#F59E0B',       // Amber
+  monitor: '#3B82F6',      // Blue
+  ok: '#10B981',           // Green
+
+  // Chart gradients using severity system
+  gradient: ['#EF4444', '#F59E0B', '#3B82F6', '#10B981', '#60A5FA', '#34D399'],
+
+  // Severity scale (red to amber to blue to green)
+  severity: ['#DC2626', '#EF4444', '#F59E0B', '#FBBF24', '#3B82F6', '#60A5FA', '#10B981'],
+
+  // Legacy support
+  primary: '#3B82F6',
+  secondary: '#60A5FA',
+  success: '#10B981',
+  warning: '#F59E0B',
+  error: '#DC2626',
+  info: '#3B82F6',
+  neutral: '#64748B',
+
+  // Backgrounds
+  bgDeepNavy: '#060b18',
+  bgNavyLighter: '#0f1729',
+  bgNavyCard: '#1a2332'
 };
 
 const DefectAnalytics = () => {
@@ -235,7 +256,7 @@ const DefectAnalytics = () => {
       const [recResponse, envResponse, survResponse] = await Promise.all([
         fetch('/data/ml_defect_analytics/recurrence_forecast_comparison.csv'),
         fetch('/data/ml_defect_analytics/environmental_model_comparison.csv'),
-        fetch('/api/defects/survival-model')
+        fetch('/data/ml_defect_analytics/survival_cox_model.json')
       ]);
 
       const [recText, envText, surv] = await Promise.all([
@@ -400,11 +421,11 @@ const DefectAnalytics = () => {
     return (
       <Box>
         {/* Executive Summary Header */}
-        <Paper sx={{ p: 3, mb: 3, background: 'linear-gradient(135deg, #1565C0 0%, #0277BD 100%)', color: 'white' }}>
-          <Typography variant="h5" fontWeight={600} gutterBottom>
-            Executive Analytics Dashboard
+        <Paper sx={{ p: 3, mb: 3, bgcolor: COLORS.bgNavyCard, borderTop: `3px solid ${COLORS.monitor}`, borderRadius: 2 }}>
+          <Typography variant="h5" fontWeight={600} gutterBottom sx={{ color: 'white' }}>
+            📊 Executive Analytics Dashboard
           </Typography>
-          <Typography variant="body2" sx={{ opacity: 0.95 }}>
+          <Typography variant="body2" sx={{ color: '#94A3B8' }}>
             {getContextLabel()} • Comprehensive Maintenance Intelligence
           </Typography>
         </Paper>
@@ -412,84 +433,84 @@ const DefectAnalytics = () => {
         {/* KPI Cards */}
         <Grid container spacing={2} sx={{ mb: 3 }}>
           <Grid item xs={12} sm={6} md={3}>
-            <Card sx={{ height: '100%', borderTop: `4px solid ${COLORS.primary}` }}>
+            <Card sx={{ height: '100%', borderTop: `4px solid ${COLORS.monitor}`, bgcolor: COLORS.bgNavyCard }}>
               <CardContent>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                   <Box>
                     <Typography color="text.secondary" variant="caption" fontWeight={500}>
                       TOTAL DEFECTS
                     </Typography>
-                    <Typography variant="h4" fontWeight={700} color="primary" sx={{ mt: 1 }}>
+                    <Typography variant="h4" fontWeight={700} className="numeric-value" sx={{ mt: 1, color: 'white' }}>
                       {kpis.totalDefects.toLocaleString()}
                     </Typography>
                     <Typography variant="caption" color="text.secondary">
                       {kpis.subsystemCount} subsystems tracked
                     </Typography>
                   </Box>
-                  <Assessment sx={{ fontSize: 40, color: COLORS.primary, opacity: 0.3 }} />
+                  <Assessment sx={{ fontSize: 40, color: COLORS.monitor, opacity: 0.3 }} />
                 </Box>
               </CardContent>
             </Card>
           </Grid>
 
           <Grid item xs={12} sm={6} md={3}>
-            <Card sx={{ height: '100%', borderTop: `4px solid ${COLORS.warning}` }}>
+            <Card sx={{ height: '100%', borderTop: `4px solid ${COLORS.urgent}`, bgcolor: COLORS.bgNavyCard }}>
               <CardContent>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                   <Box>
                     <Typography color="text.secondary" variant="caption" fontWeight={500}>
                       AVG FREQUENCY
                     </Typography>
-                    <Typography variant="h4" fontWeight={700} color="warning.main" sx={{ mt: 1 }}>
+                    <Typography variant="h4" fontWeight={700} className="numeric-value" sx={{ mt: 1, color: COLORS.urgent }}>
                       {kpis.avgFrequency.toFixed(1)}
                     </Typography>
                     <Typography variant="caption" color="text.secondary">
                       defects per month
                     </Typography>
                   </Box>
-                  <TrendingUp sx={{ fontSize: 40, color: COLORS.warning, opacity: 0.3 }} />
+                  <TrendingUp sx={{ fontSize: 40, color: COLORS.urgent, opacity: 0.3 }} />
                 </Box>
               </CardContent>
             </Card>
           </Grid>
 
           <Grid item xs={12} sm={6} md={3}>
-            <Card sx={{ height: '100%', borderTop: `4px solid ${COLORS.error}` }}>
+            <Card sx={{ height: '100%', borderTop: `4px solid ${COLORS.critical}`, bgcolor: COLORS.bgNavyCard }}>
               <CardContent>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                   <Box>
                     <Typography color="text.secondary" variant="caption" fontWeight={500}>
                       TOTAL COST
                     </Typography>
-                    <Typography variant="h4" fontWeight={700} color="error.main" sx={{ mt: 1 }}>
+                    <Typography variant="h4" fontWeight={700} className="numeric-value" sx={{ mt: 1, color: COLORS.critical }}>
                       ${(kpis.totalCost / 1000000).toFixed(1)}M
                     </Typography>
                     <Typography variant="caption" color="text.secondary">
                       maintenance expenditure
                     </Typography>
                   </Box>
-                  <Warning sx={{ fontSize: 40, color: COLORS.error, opacity: 0.3 }} />
+                  <Warning sx={{ fontSize: 40, color: COLORS.critical, opacity: 0.3 }} />
                 </Box>
               </CardContent>
             </Card>
           </Grid>
 
           <Grid item xs={12} sm={6} md={3}>
-            <Card sx={{ height: '100%', borderTop: `4px solid ${COLORS.info}` }}>
+            <Card sx={{ height: '100%', borderTop: `4px solid ${COLORS.critical}`, bgcolor: COLORS.bgNavyCard }}>
               <CardContent>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                   <Box>
                     <Typography color="text.secondary" variant="caption" fontWeight={500}>
                       HIGH SEVERITY
                     </Typography>
-                    <Typography variant="h4" fontWeight={700} color="info.main" sx={{ mt: 1 }}>
+                    <Typography variant="h4" fontWeight={700} className="numeric-value" sx={{ mt: 1, color: COLORS.critical }}>
                       {kpis.highSeverityCount}
                     </Typography>
                     <Typography variant="caption" color="text.secondary">
                       critical subsystems
                     </Typography>
                   </Box>
-                  <Error sx={{ fontSize: 40, color: COLORS.info, opacity: 0.3 }} />
+                  <Error sx={{ fontSize: 40, color: COLORS.critical, opacity: 0.3 }} />
                 </Box>
               </CardContent>
             </Card>
@@ -776,11 +797,11 @@ const DefectAnalytics = () => {
 
     return (
       <Box>
-        <Paper sx={{ p: 3, mb: 3, bgcolor: '#E3F2FD' }}>
-          <Typography variant="h5" fontWeight={600} gutterBottom>
-            Recurrence Analysis
+        <Paper className="tab-header recurrence">
+          <Typography variant="h5" fontWeight={600} gutterBottom sx={{ color: 'white' }}>
+            🔄 Recurrence Analysis
           </Typography>
-          <Typography variant="body2" color="text.secondary">
+          <Typography variant="body2" sx={{ color: '#94A3B8' }}>
             Identifying patterns in defect frequency and predicting future occurrences
           </Typography>
         </Paper>
@@ -931,11 +952,11 @@ const DefectAnalytics = () => {
 
     return (
       <Box>
-        <Paper sx={{ p: 3, mb: 3, bgcolor: '#FFEBEE' }}>
-          <Typography variant="h5" fontWeight={600} gutterBottom>
-            Severity Analysis
+        <Paper className="tab-header severity">
+          <Typography variant="h5" fontWeight={600} gutterBottom sx={{ color: 'white' }}>
+            ⚠️ Severity Analysis
           </Typography>
-          <Typography variant="body2" color="text.secondary">
+          <Typography variant="body2" sx={{ color: '#94A3B8' }}>
             Composite scoring based on cost, duration, and frequency to prioritize maintenance efforts
           </Typography>
         </Paper>
@@ -1014,63 +1035,111 @@ const DefectAnalytics = () => {
           </ResponsiveContainer>
         </Paper>
 
-        {/* Top Severe Subsystems Table */}
-        <Paper sx={{ p: 3 }}>
-          <Typography variant="h6" fontWeight={600} gutterBottom>
-            Priority Action List
+        {/* Enhanced Priority Action List */}
+        <Paper sx={{ p: 3, bgcolor: COLORS.bgNavyCard }}>
+          <Typography variant="h6" fontWeight={600} gutterBottom sx={{ color: 'white' }}>
+            🎯 Priority Action List
           </Typography>
-          <Divider sx={{ mb: 2 }} />
-          <TableContainer>
-            <Table size="small">
-              <TableHead>
-                <TableRow sx={{ bgcolor: '#f5f5f5' }}>
-                  <TableCell sx={{ fontWeight: 700 }}>Priority</TableCell>
-                  <TableCell sx={{ fontWeight: 700 }}>Subsystem</TableCell>
-                  <TableCell align="right" sx={{ fontWeight: 700 }}>Severity Score</TableCell>
-                  <TableCell align="right" sx={{ fontWeight: 700 }}>Avg Cost</TableCell>
-                  <TableCell align="right" sx={{ fontWeight: 700 }}>Avg Duration</TableCell>
-                  <TableCell sx={{ fontWeight: 700 }}>Action Required</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {topSevere.slice(0, 10).map((row, idx) => (
-                  <TableRow key={idx} hover>
-                    <TableCell>
+          <Typography variant="body2" sx={{ color: '#94A3B8', mb: 2 }}>
+            Items ranked by severity — Red: Immediate, Amber: Urgent, Blue: Monitor
+          </Typography>
+          <Divider sx={{ mb: 3, borderColor: '#334155' }} />
+
+          <Stack spacing={2}>
+            {topSevere.slice(0, 10).map((row, idx) => {
+              const isImmediate = idx < 3;
+              const isUrgent = idx >= 3 && idx < 5;
+              const statusLabel = isImmediate ? 'Immediate' : isUrgent ? 'Urgent' : 'Monitor';
+              const statusColor = isImmediate ? COLORS.critical : isUrgent ? COLORS.urgent : COLORS.monitor;
+              const borderColor = isImmediate ? COLORS.critical : isUrgent ? COLORS.urgent : COLORS.monitor;
+
+              return (
+                <Card
+                  key={idx}
+                  sx={{
+                    bgcolor: COLORS.bgNavyLighter,
+                    borderLeft: `4px solid ${borderColor}`,
+                    transition: 'all 0.2s',
+                    '&:hover': {
+                      transform: 'translateX(4px)',
+                      bgcolor: COLORS.bgNavyCard
+                    }
+                  }}
+                >
+                  <CardContent>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Chip
+                          label={`#${idx + 1}`}
+                          size="small"
+                          sx={{
+                            bgcolor: statusColor,
+                            color: 'white',
+                            fontWeight: 700,
+                            minWidth: 40
+                          }}
+                        />
+                        <Typography variant="body1" fontWeight={600} sx={{ color: 'white' }}>
+                          {row.SubsystemDescription}
+                        </Typography>
+                      </Box>
                       <Chip
-                        label={`#${idx + 1}`}
+                        label={statusLabel}
                         size="small"
+                        className="status-pill"
                         sx={{
-                          bgcolor: COLORS.severity[Math.min(idx, 4)],
+                          bgcolor: statusColor,
                           color: 'white',
-                          fontWeight: 700
+                          fontWeight: 600,
+                          textTransform: 'uppercase'
                         }}
                       />
-                    </TableCell>
-                    <TableCell sx={{ fontWeight: 500 }}>{row.SubsystemDescription}</TableCell>
-                    <TableCell align="right">
-                      <strong>{row.severity_score?.toFixed(2)}</strong>
-                    </TableCell>
-                    <TableCell align="right">${row.avg_cost?.toFixed(2)}</TableCell>
-                    <TableCell align="right">{row.avg_duration?.toFixed(1)} hrs</TableCell>
-                    <TableCell>
-                      <Chip
-                        label={
-                          row.severity_score > 15
-                            ? 'Immediate'
-                            : row.severity_score > 10
-                            ? 'High Priority'
-                            : 'Monitor'
-                        }
-                        size="small"
-                        color={row.severity_score > 15 ? 'error' : row.severity_score > 10 ? 'warning' : 'default'}
-                        sx={{ fontWeight: 600 }}
-                      />
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
+                    </Box>
+
+                    <Grid container spacing={2} sx={{ mb: 2 }}>
+                      <Grid item xs={6} sm={3}>
+                        <Typography variant="caption" sx={{ color: '#94A3B8' }}>Severity Score</Typography>
+                        <Typography variant="h6" className="numeric-value" sx={{ color: 'white' }}>
+                          {row.severity_score?.toFixed(2)}
+                        </Typography>
+                      </Grid>
+                      <Grid item xs={6} sm={3}>
+                        <Typography variant="caption" sx={{ color: '#94A3B8' }}>Avg Cost</Typography>
+                        <Typography variant="h6" className="numeric-value" sx={{ color: COLORS.urgent }}>
+                          ${row.avg_cost?.toFixed(2)}
+                        </Typography>
+                      </Grid>
+                      <Grid item xs={6} sm={3}>
+                        <Typography variant="caption" sx={{ color: '#94A3B8' }}>Repair Time</Typography>
+                        <Typography variant="h6" className="numeric-value" sx={{ color: 'white' }}>
+                          {row.avg_duration?.toFixed(1)} hrs
+                        </Typography>
+                      </Grid>
+                      <Grid item xs={6} sm={3}>
+                        <Typography variant="caption" sx={{ color: '#94A3B8' }}>Frequency</Typography>
+                        <Typography variant="h6" className="numeric-value" sx={{ color: 'white' }}>
+                          {row.frequency_per_month?.toFixed(1)}/mo
+                        </Typography>
+                      </Grid>
+                    </Grid>
+
+                    <Alert type={isImmediate ? 'danger' : isUrgent ? 'warn' : 'info'}>
+                      <strong>Action: </strong>
+                      {isImmediate &&
+                        'Schedule comprehensive inspection immediately. Allocate emergency maintenance budget. Consider equipment replacement if repair costs exceed 60% of replacement value.'
+                      }
+                      {isUrgent &&
+                        'Plan inspection within this week. Increase monitoring frequency. Prepare maintenance resources and parts inventory.'
+                      }
+                      {!isImmediate && !isUrgent &&
+                        'Monitor closely and schedule preventive maintenance. Track trends and implement predictive maintenance strategies.'
+                      }
+                    </Alert>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </Stack>
         </Paper>
       </Box>
     );
@@ -1091,22 +1160,9 @@ const DefectAnalytics = () => {
     }
 
     const topSensitive = data
-      .filter(row => row.strongest_correlation !== '' && row.strongest_correlation != null && Math.abs(row.strongest_correlation || 0) > 0.1)
+      .filter(row => Math.abs(row.strongest_correlation || 0) > 0.1)
       .sort((a, b) => Math.abs(b.strongest_correlation || 0) - Math.abs(a.strongest_correlation || 0))
       .slice(0, 15);
-
-    if (topSensitive.length === 0) {
-      return (
-        <Box sx={{ textAlign: 'center', py: 8 }}>
-          <Typography variant="h6" color="text.secondary">
-            No environmental sensitivity data available for this selection.
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-            Select a specific university to view environmental correlation data.
-          </Typography>
-        </Box>
-      );
-    }
 
     // Group by weather factor
     const weatherFactorGroups = topSensitive.reduce((acc, row) => {
@@ -1124,11 +1180,11 @@ const DefectAnalytics = () => {
 
     return (
       <Box>
-        <Paper sx={{ p: 3, mb: 3, bgcolor: '#E8F5E9' }}>
-          <Typography variant="h5" fontWeight={600} gutterBottom>
-            Environmental Sensitivity Analysis
+        <Paper className="tab-header environmental">
+          <Typography variant="h5" fontWeight={600} gutterBottom sx={{ color: 'white' }}>
+            🌤️ Environmental Sensitivity Analysis
           </Typography>
-          <Typography variant="body2" color="text.secondary">
+          <Typography variant="body2" sx={{ color: '#94A3B8' }}>
             Analyzing the impact of weather and environmental conditions on defect occurrence
           </Typography>
         </Paper>
@@ -1142,7 +1198,7 @@ const DefectAnalytics = () => {
           <ResponsiveContainer width="100%" height={450}>
             <BarChart data={topSensitive} layout="horizontal" margin={{ left: 120, right: 30 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis type="number" domain={[-1, 1]} stroke="#666" />
+              <XAxis type="number" domain={[0, 1]} stroke="#666" />
               <YAxis
                 type="category"
                 dataKey="SubsystemDescription"
@@ -1314,114 +1370,183 @@ const DefectAnalytics = () => {
 
     return (
       <Box>
-        <Paper sx={{ p: 3, mb: 3, background: 'linear-gradient(135deg, #E1F5FE 0%, #B3E5FC 100%)' }}>
-          <Typography variant="h5" fontWeight={600} gutterBottom>
-            AI/ML Model Performance Analysis
+        <Paper className="tab-header ai-ml">
+          <Typography variant="h5" fontWeight={600} gutterBottom sx={{ color: 'white' }}>
+            🧠 AI/ML Model Performance Analysis
           </Typography>
-          <Typography variant="body2" color="text.secondary">
+          <Typography variant="body2" sx={{ color: '#94A3B8' }}>
             Comprehensive evaluation of predictive models for maintenance optimization
           </Typography>
         </Paper>
 
-        {/* Model Performance Scorecards */}
+        {/* Enhanced Model Performance Scorecards */}
         <Grid container spacing={3} sx={{ mb: 3 }}>
-          {/* Recurrence Forecasting */}
+          {/* Recurrence Forecasting - Needs Work (Amber) */}
           <Grid item xs={12} md={4}>
-            <Card sx={{ height: '100%', border: `2px solid ${COLORS.primary}` }}>
+            <Card className="model-tile needs-work" sx={{ height: '100%', bgcolor: COLORS.bgNavyCard }}>
               <CardContent>
-                <Typography variant="overline" color="text.secondary" fontWeight={600}>
-                  Model 1: Recurrence Forecasting
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+                  <Box
+                    sx={{
+                      width: 12,
+                      height: 12,
+                      borderRadius: '50%',
+                      bgcolor: COLORS.urgent,
+                      animation: 'pulse 2s ease-in-out infinite',
+                      '@keyframes pulse': {
+                        '0%, 100%': { opacity: 1 },
+                        '50%': { opacity: 0.5 }
+                      }
+                    }}
+                  />
+                  <Typography variant="overline" sx={{ color: '#94A3B8', fontWeight: 600, letterSpacing: '0.1em' }}>
+                    Model 1: Recurrence Forecasting
+                  </Typography>
+                </Box>
+                <Typography variant="h5" fontWeight={700} sx={{ color: 'white', mb: 1 }}>
+                  XGBoost Recurrence
                 </Typography>
-                <Typography variant="h5" fontWeight={700} color="primary" sx={{ my: 1 }}>
-                  Time Series Models
-                </Typography>
-                <Divider sx={{ my: 2 }} />
-                <Stack spacing={1}>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <Typography variant="body2">Best Performer:</Typography>
-                    <Chip label="XGBoost" size="small" color="primary" sx={{ fontWeight: 600 }} />
-                  </Box>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <Typography variant="body2">MAE Range:</Typography>
-                    <Typography variant="body2" fontWeight={600}>
-                      127-248
+                <Divider sx={{ my: 2, borderColor: '#334155' }} />
+                <Stack spacing={2}>
+                  <Box>
+                    <Typography variant="caption" sx={{ color: '#94A3B8' }}>
+                      Best Performer
+                    </Typography>
+                    <Typography variant="h6" fontWeight={700} sx={{ color: 'white' }}>
+                      XGBoost
                     </Typography>
                   </Box>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <Typography variant="body2">Grade:</Typography>
-                    <Chip label="B+" size="small" color="primary" />
+                  <Box>
+                    <Typography variant="caption" sx={{ color: '#94A3B8' }}>
+                      MAE Range (defects/month)
+                    </Typography>
+                    <Typography variant="h6" fontWeight={700} className="numeric-value" sx={{ color: COLORS.urgent }}>
+                      127–248
+                    </Typography>
+                  </Box>
+                  <Box>
+                    <Typography variant="caption" sx={{ color: '#94A3B8' }}>
+                      Performance Grade
+                    </Typography>
+                    <Chip
+                      label="B+"
+                      sx={{
+                        bgcolor: COLORS.urgent,
+                        color: 'white',
+                        fontWeight: 700,
+                        fontSize: '1rem'
+                      }}
+                    />
                   </Box>
                 </Stack>
-                <Alert severity="info" sx={{ mt: 2 }} variant="outlined">
-                  Suitable for short to medium-term forecasting
+                <Alert type="warn">
+                  <strong>Status:</strong> Needs refinement. Suitable for short to medium-term forecasting. Consider ensemble methods for improved accuracy.
                 </Alert>
               </CardContent>
             </Card>
           </Grid>
 
-          {/* Environmental Impact */}
+          {/* Environmental Impact - Production Ready (Green) */}
           <Grid item xs={12} md={4}>
-            <Card sx={{ height: '100%', border: `2px solid ${COLORS.success}` }}>
+            <Card className="model-tile production-ready" sx={{ height: '100%', bgcolor: COLORS.bgNavyCard }}>
               <CardContent>
-                <Typography variant="overline" color="text.secondary" fontWeight={600}>
-                  Model 2: Environmental Impact
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+                  <CheckCircle sx={{ color: COLORS.ok, fontSize: 20 }} />
+                  <Typography variant="overline" sx={{ color: '#94A3B8', fontWeight: 600, letterSpacing: '0.1em' }}>
+                    Model 2: Environmental Impact
+                  </Typography>
+                </Box>
+                <Typography variant="h5" fontWeight={700} sx={{ color: 'white', mb: 1 }}>
+                  Environmental ML
                 </Typography>
-                <Typography variant="h5" fontWeight={700} color="success.main" sx={{ my: 1 }}>
-                  ML Regression
-                </Typography>
-                <Divider sx={{ my: 2 }} />
-                <Stack spacing={1}>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <Typography variant="body2">Best Performer:</Typography>
-                    <Chip label={bestEnvModel?.model || 'XGBoost'} size="small" color="success" sx={{ fontWeight: 600 }} />
-                  </Box>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <Typography variant="body2">R² Score:</Typography>
-                    <Typography variant="body2" fontWeight={600}>
-                      {bestEnvModel?.test_r2?.toFixed(4) || '0.8134'}
+                <Divider sx={{ my: 2, borderColor: '#334155' }} />
+                <Stack spacing={2}>
+                  <Box>
+                    <Typography variant="caption" sx={{ color: '#94A3B8' }}>
+                      Best Performer
+                    </Typography>
+                    <Typography variant="h6" fontWeight={700} sx={{ color: 'white' }}>
+                      {bestEnvModel?.model || 'XGBoost'}
                     </Typography>
                   </Box>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <Typography variant="body2">Grade:</Typography>
-                    <Chip label="A" size="small" color="success" />
+                  <Box>
+                    <Typography variant="caption" sx={{ color: '#94A3B8' }}>
+                      R² Score (Variance Explained)
+                    </Typography>
+                    <Typography variant="h6" fontWeight={700} className="numeric-value" sx={{ color: COLORS.ok }}>
+                      {bestEnvModel?.test_r2?.toFixed(4) || '0.8134'} (81.3%)
+                    </Typography>
+                  </Box>
+                  <Box>
+                    <Typography variant="caption" sx={{ color: '#94A3B8' }}>
+                      Performance Grade
+                    </Typography>
+                    <Chip
+                      label="A"
+                      sx={{
+                        bgcolor: COLORS.ok,
+                        color: 'white',
+                        fontWeight: 700,
+                        fontSize: '1rem'
+                      }}
+                    />
                   </Box>
                 </Stack>
-                <Alert severity="success" sx={{ mt: 2 }} variant="outlined">
-                  Production-ready • 81.3% variance explained
+                <Alert type="success">
+                  <strong>Status:</strong> Production-ready ✓ Deploy immediately for weather-based predictive maintenance scheduling.
                 </Alert>
               </CardContent>
             </Card>
           </Grid>
 
-          {/* Survival Analysis */}
+          {/* Survival Analysis - Not Ready (Red/Amber) */}
           <Grid item xs={12} md={4}>
-            <Card sx={{ height: '100%', border: `2px solid ${COLORS.warning}` }}>
+            <Card className="model-tile needs-work" sx={{ height: '100%', bgcolor: COLORS.bgNavyCard }}>
               <CardContent>
-                <Typography variant="overline" color="text.secondary" fontWeight={600}>
-                  Model 3: Time-to-Failure
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+                  <Warning sx={{ color: COLORS.urgent, fontSize: 20 }} />
+                  <Typography variant="overline" sx={{ color: '#94A3B8', fontWeight: 600, letterSpacing: '0.1em' }}>
+                    Model 3: Time-to-Failure
+                  </Typography>
+                </Box>
+                <Typography variant="h5" fontWeight={700} sx={{ color: 'white', mb: 1 }}>
+                  Cox Survival Model
                 </Typography>
-                <Typography variant="h5" fontWeight={700} color="warning.main" sx={{ my: 1 }}>
-                  Survival Analysis
-                </Typography>
-                <Divider sx={{ my: 2 }} />
-                <Stack spacing={1}>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <Typography variant="body2">Model:</Typography>
-                    <Chip label="Cox PH" size="small" color="warning" sx={{ fontWeight: 600 }} />
+                <Divider sx={{ my: 2, borderColor: '#334155' }} />
+                <Stack spacing={2}>
+                  <Box>
+                    <Typography variant="caption" sx={{ color: '#94A3B8' }}>
+                      Model Type
+                    </Typography>
+                    <Typography variant="h6" fontWeight={700} sx={{ color: 'white' }}>
+                      Cox Proportional Hazards
+                    </Typography>
                   </Box>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <Typography variant="body2">C-index:</Typography>
-                    <Typography variant="body2" fontWeight={600}>
+                  <Box>
+                    <Typography variant="caption" sx={{ color: '#94A3B8' }}>
+                      C-index (Concordance)
+                    </Typography>
+                    <Typography variant="h6" fontWeight={700} className="numeric-value" sx={{ color: COLORS.urgent }}>
                       {survivalResults?.c_index?.toFixed(4) || '0.5232'}
                     </Typography>
                   </Box>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <Typography variant="body2">Grade:</Typography>
-                    <Chip label="C" size="small" color="warning" />
+                  <Box>
+                    <Typography variant="caption" sx={{ color: '#94A3B8' }}>
+                      Performance Grade
+                    </Typography>
+                    <Chip
+                      label="C"
+                      sx={{
+                        bgcolor: COLORS.urgent,
+                        color: 'white',
+                        fontWeight: 700,
+                        fontSize: '1rem'
+                      }}
+                    />
                   </Box>
                 </Stack>
-                <Alert severity="warning" sx={{ mt: 2 }} variant="outlined">
-                  Requires additional features for improvement
+                <Alert type="warn">
+                  <strong>Status:</strong> Requires improvement. Add equipment age, building type, and maintenance history features before deployment.
                 </Alert>
               </CardContent>
             </Card>
@@ -1649,11 +1774,11 @@ const DefectAnalytics = () => {
 
     return (
       <Box>
-        <Paper sx={{ p: 3, mb: 3, background: 'linear-gradient(135deg, #FFF3E0 0%, #FFE0B2 100%)' }}>
-          <Typography variant="h5" fontWeight={600} gutterBottom>
-            Strategic Recommendations
+        <Paper className="tab-header recommendations">
+          <Typography variant="h5" fontWeight={600} gutterBottom sx={{ color: 'white' }}>
+            💡 Strategic Recommendations
           </Typography>
-          <Typography variant="body2" color="text.secondary">
+          <Typography variant="body2" sx={{ color: '#94A3B8' }}>
             Data-driven action items for {getContextLabel()}
           </Typography>
         </Paper>
@@ -1914,22 +2039,23 @@ const DefectAnalytics = () => {
   }
 
   return (
-    <Container maxWidth="xl" sx={{ py: 4 }}>
-      {/* Header */}
-      <Box sx={{ mb: 4 }}>
-        <Typography variant="h3" fontWeight={700} gutterBottom sx={{ color: COLORS.primary }}>
-          Defect Analytics Intelligence
-        </Typography>
-        <Typography variant="body1" color="text.secondary">
-          Master's-Level Predictive Maintenance Analytics Platform
-        </Typography>
-      </Box>
+    <Box sx={{ bgcolor: COLORS.bgDeepNavy, minHeight: '100vh', py: 4 }}>
+      <Container maxWidth="xl">
+        {/* Header */}
+        <Box sx={{ mb: 4 }}>
+          <Typography variant="h3" fontWeight={700} gutterBottom sx={{ color: 'white' }}>
+            🎯 Defect Analytics Intelligence
+          </Typography>
+          <Typography variant="body1" sx={{ color: '#94A3B8' }}>
+            Master's-Level Predictive Maintenance Analytics Platform for Faculty Managers
+          </Typography>
+        </Box>
 
-      {/* Filters */}
-      <Paper sx={{ p: 3, mb: 3, boxShadow: 3 }}>
-        <Typography variant="subtitle1" fontWeight={600} gutterBottom sx={{ mb: 2 }}>
-          Drill-Down Filters
-        </Typography>
+        {/* Filters */}
+        <Paper sx={{ p: 3, mb: 3, bgcolor: COLORS.bgNavyCard, boxShadow: 3 }}>
+          <Typography variant="subtitle1" fontWeight={600} gutterBottom sx={{ mb: 2, color: 'white' }}>
+            🔍 Drill-Down Filters
+          </Typography>
         <Grid container spacing={2}>
           <Grid item xs={12} sm={6} md={3}>
             <FormControl fullWidth size="small">
@@ -1998,9 +2124,10 @@ const DefectAnalytics = () => {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                bgcolor: '#E3F2FD',
+                bgcolor: COLORS.bgNavyLighter,
                 borderRadius: 1,
-                px: 2
+                px: 2,
+                border: `1px solid ${COLORS.monitor}`
               }}
             >
               <Typography variant="body2" fontWeight={600} color="primary" textAlign="center">
@@ -2011,41 +2138,46 @@ const DefectAnalytics = () => {
         </Grid>
       </Paper>
 
-      {/* Tabs */}
-      <Paper sx={{ boxShadow: 3 }}>
-        <Tabs
-          value={activeTab}
-          onChange={(e, newValue) => setActiveTab(newValue)}
-          variant="scrollable"
-          scrollButtons="auto"
-          sx={{
-            borderBottom: 1,
-            borderColor: 'divider',
-            '& .MuiTab-root': {
-              fontWeight: 600,
-              fontSize: '0.9rem',
-              textTransform: 'none'
-            }
-          }}
-        >
-          <Tab label="Overview" icon={<Assessment />} iconPosition="start" />
-          <Tab label="Recurrence Analysis" icon={<TrendingUp />} iconPosition="start" />
-          <Tab label="Severity Analysis" icon={<Warning />} iconPosition="start" />
-          <Tab label="Environmental" icon={<Cloud />} iconPosition="start" />
-          <Tab label="AI/ML Performance" icon={<Psychology />} iconPosition="start" />
-          <Tab label="Recommendations" icon={<EmojiObjects />} iconPosition="start" />
-        </Tabs>
+        {/* Tabs */}
+        <Paper sx={{ boxShadow: 3, bgcolor: COLORS.bgNavyCard }}>
+          <Tabs
+            value={activeTab}
+            onChange={(e, newValue) => setActiveTab(newValue)}
+            variant="scrollable"
+            scrollButtons="auto"
+            sx={{
+              borderBottom: 1,
+              borderColor: '#334155',
+              '& .MuiTab-root': {
+                fontWeight: 600,
+                fontSize: '0.9rem',
+                textTransform: 'none',
+                color: '#94A3B8',
+                '&.Mui-selected': {
+                  color: COLORS.monitor
+                }
+              }
+            }}
+          >
+            <Tab label="Overview" icon={<Assessment />} iconPosition="start" />
+            <Tab label="Recurrence Analysis" icon={<TrendingUp />} iconPosition="start" />
+            <Tab label="Severity Analysis" icon={<Warning />} iconPosition="start" />
+            <Tab label="Environmental" icon={<Cloud />} iconPosition="start" />
+            <Tab label="AI/ML Performance" icon={<Psychology />} iconPosition="start" />
+            <Tab label="Recommendations" icon={<EmojiObjects />} iconPosition="start" />
+          </Tabs>
 
-        <Box sx={{ p: 4 }}>
-          {activeTab === 0 && OverviewTab()}
-          {activeTab === 1 && RecurrenceTab()}
-          {activeTab === 2 && SeverityTab()}
-          {activeTab === 3 && EnvironmentalTab()}
-          {activeTab === 4 && AIMLPerformanceTab()}
-          {activeTab === 5 && RecommendationsTab()}
-        </Box>
-      </Paper>
-    </Container>
+          <Box sx={{ p: 4, bgcolor: COLORS.bgDeepNavy }}>
+            {activeTab === 0 && <OverviewTab />}
+            {activeTab === 1 && <RecurrenceTab />}
+            {activeTab === 2 && <SeverityTab />}
+            {activeTab === 3 && <EnvironmentalTab />}
+            {activeTab === 4 && <AIMLPerformanceTab />}
+            {activeTab === 5 && <RecommendationsTab />}
+          </Box>
+        </Paper>
+      </Container>
+    </Box>
   );
 };
 
