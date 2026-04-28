@@ -27,6 +27,7 @@ wheels/
 # Data
 data/processed/
 *.csv
+!data/dashboard/*.csv
 *.pkl
 
 # Models
@@ -62,7 +63,9 @@ logs/
 # Streamlit
 .streamlit/
 
-data/
+# Data - ignore everything except dashboard folder
+data/*
+!data/dashboard/
 
 # Node
 node_modules/
