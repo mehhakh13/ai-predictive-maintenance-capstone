@@ -132,6 +132,10 @@ const DefectTable = ({ data, onRowClick }) => {
         </table>
       </div>
 
+      <div style={{ fontSize: '11px', color: '#64748b', padding: '8px 4px 0', fontStyle: 'italic' }}>
+        * Cost figures are synthetic estimates based on defect type and priority — real cost data (DMC) is unavailable in the source dataset.
+      </div>
+
       {totalPages > 1 && (
         <div className="table-pagination">
           <button

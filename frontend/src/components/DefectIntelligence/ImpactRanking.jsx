@@ -9,7 +9,10 @@ import { AlertTriangle, TrendingUp } from 'lucide-react';
 const ImpactRanking = ({ data, onDefectClick }) => {
   const sortedData = useMemo(() => {
     if (!data || !Array.isArray(data)) return [];
-    return [...data].sort((a, b) => b.count - a.count).slice(0, 15);
+    return [...data]
+      .filter(d => d.defect_category !== 'Mixed/Administrative Tasks')
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 15);
   }, [data]);
 
   const getRiskColor = (riskLevel) => {

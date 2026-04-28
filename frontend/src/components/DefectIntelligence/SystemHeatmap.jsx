@@ -8,20 +8,26 @@ const SystemHeatmap = ({ data, onCellClick }) => {
     const systemSet = new Set();
     const defectTypeSet = new Set();
 
+    if (!data || !Array.isArray(data)) {
+      return { heatmapData: {}, systems: [], defectTypes: [], maxValue: 1 };
+    }
+
     data.forEach(item => {
-      if (!item.SystemDescription || !item.defect_type) return;
+      // Support both aggregated format {system, defect_category, count} and raw record format
+      const sys = item.system || item.SystemDescription;
+      const defType = item.defect_category || item.defect_type;
+      const count = typeof item.count === 'number' ? item.count : 1;
 
-      const key = `${item.SystemDescription}|${item.defect_type}`;
+      if (!sys || !defType) return;
+      if (defType === 'Mixed/Administrative Tasks') return;
 
+      const key = `${sys}|${defType}`;
       if (!matrix[key]) {
-        matrix[key] = { count: 0, items: [] };
+        matrix[key] = { count: 0 };
       }
-
-      matrix[key].count += 1;
-      matrix[key].items.push(item);
-
-      systemSet.add(item.SystemDescription);
-      defectTypeSet.add(item.defect_type);
+      matrix[key].count += count;
+      systemSet.add(sys);
+      defectTypeSet.add(defType);
     });
 
     const systems = Array.from(systemSet).sort();
@@ -52,7 +58,7 @@ const SystemHeatmap = ({ data, onCellClick }) => {
     const cellData = heatmapData[key];
 
     if (cellData && onCellClick) {
-      onCellClick({ system, defectType, count: cellData.count, items: cellData.items });
+      onCellClick({ system, defectType, count: cellData.count });
     }
   };
 

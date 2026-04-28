@@ -684,16 +684,50 @@ async def get_defect_intelligence(
         raise HTTPException(status_code=503, detail="Defect data not loaded")
 
     try:
-        df = df_defects.copy()
+        df = df_defects  # read-only reference; no copy until we mutate
 
         topic_to_name = dict(zip(topic_info['Topic'], topic_info['Name']))
-        df['defect_type'] = df['topic_id'].apply(
-            lambda tid: create_defect_label(topic_to_name.get(tid, f'topic_{tid}'), tid)
-        )
 
-        df['TotalCost'] = pd.to_numeric(df.get('TotalCost'), errors='coerce').fillna(0)
+        # Build label map on unique topic_ids only (~100 values, not 2M rows)
+        unique_tids = df['topic_id'].unique()
+        topic_to_label = {
+            int(tid): create_defect_label(topic_to_name.get(tid, f'topic_{tid}'), int(tid))
+            for tid in unique_tids
+        }
 
+        # Collect metadata from full df using vectorized/unique ops (fast)
         univ_ids = sorted(df['UniversityID'].dropna().unique().astype(int).tolist())
+        all_defect_types = sorted(set(topic_to_label.values()))
+        systems = sorted(df['SystemDescription'].dropna().unique().tolist())
+
+        # Apply filters using boolean masks (vectorized, no apply)
+        mask = pd.Series(True, index=df.index)
+        if universityId and universityId != 'all':
+            mask &= df['UniversityID'] == int(universityId)
+        if buildingId and buildingId != 'all':
+            mask &= df['BuildingID'] == buildingId
+        if defectType and defectType != 'all':
+            matching_tids = [tid for tid, label in topic_to_label.items() if label == defectType]
+            mask &= df['topic_id'].isin(matching_tids)
+        if system and system != 'all':
+            mask &= df['SystemDescription'] == system
+        if startDate:
+            mask &= pd.to_datetime(df['WOStartDate']) >= pd.to_datetime(startDate)
+        if endDate:
+            mask &= pd.to_datetime(df['WOStartDate']) <= pd.to_datetime(endDate)
+
+        # Limit to result set BEFORE any expensive per-row work
+        df = df[mask].sort_values('WOStartDate', ascending=False).head(limit).copy()
+
+        # Now do all per-row transformations on ≤100 rows
+        df['defect_type'] = df['topic_id'].map(topic_to_label)
+        df['TotalCost'] = pd.to_numeric(df['TotalCost'], errors='coerce').fillna(0)
+        zero_mask = df['TotalCost'] == 0
+        if zero_mask.any():
+            df.loc[zero_mask, 'TotalCost'] = df[zero_mask].apply(
+                lambda row: calculate_defect_cost(row, int(row['topic_id'])), axis=1
+            )
+
         university_mapping = {uid: f'University {uid}' for uid in univ_ids}
         df['UniversityName'] = df['UniversityID'].map(university_mapping).fillna('Unknown University')
 
@@ -707,21 +741,7 @@ async def get_defect_intelligence(
         if 'WOId' not in df.columns:
             df['WOId'] = [f'WO-{str(i+1).zfill(6)}' for i in range(len(df))]
 
-        if universityId and universityId != 'all':
-            df = df[df['UniversityID'] == int(universityId)]
-        if buildingId and buildingId != 'all':
-            df = df[df['BuildingID'] == buildingId]
-        if defectType and defectType != 'all':
-            df = df[df['defect_type'] == defectType]
-        if system and system != 'all':
-            df = df[df['SystemDescription'] == system]
-        if startDate:
-            df = df[pd.to_datetime(df['WOStartDate']) >= pd.to_datetime(startDate)]
-        if endDate:
-            df = df[pd.to_datetime(df['WOStartDate']) <= pd.to_datetime(endDate)]
-
-        df = df.sort_values('WOStartDate', ascending=False).head(limit)
-
+        # Buildings metadata
         universities = [{'id': uid, 'name': f'University {uid}'} for uid in univ_ids]
         if universityId and universityId != 'all':
             df_for_buildings = df_defects[df_defects['UniversityID'] == int(universityId)]
@@ -730,10 +750,6 @@ async def get_defect_intelligence(
         buildings_raw = df_for_buildings['BuildingID'].dropna().unique()
         buildings_raw = [b for b in buildings_raw if str(b) != 'nan']
         buildings = sorted([{'id': str(bid), 'name': str(bid)} for bid in buildings_raw], key=lambda x: x['id'])
-        all_defect_types = df_defects['topic_id'].apply(
-            lambda tid: create_defect_label(topic_to_name.get(tid, f'topic_{tid}'), tid)
-        ).unique().tolist()
-        systems = sorted(df_defects['SystemDescription'].dropna().unique().tolist())
 
         data = []
         for _, row in df.iterrows():

@@ -151,10 +151,12 @@ const DefectIntelligence = () => {
         <div className="heatmap-header">
           <h3>System × Defect Analysis</h3>
         </div>
-        <SystemHeatmap
-          data={data}
-          onCellClick={handleHeatmapCellClick}
-        />
+        {aggLoading
+          ? <div className="loading-spinner">Loading heatmap...</div>
+          : <SystemHeatmap
+              data={aggData.systemDefects || []}
+              onCellClick={handleHeatmapCellClick}
+            />}
         {selectedCell && (
           <div className="selected-cell-info">
             <strong>Selected:</strong> {selectedCell.system} × {selectedCell.defectType}

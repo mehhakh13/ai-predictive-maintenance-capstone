@@ -1,15 +1,10 @@
 import React, { useMemo } from 'react';
 import { Building2, AlertCircle, DollarSign, Wrench } from 'lucide-react';
 
-/**
- * Building Risk View Component
- * Shows top problematic buildings with defect counts and costs
- */
 const BuildingRiskView = ({ data, onBuildingClick }) => {
-  const topBuildings = useMemo(() => {
+  const rankedBuildings = useMemo(() => {
     if (!data || !Array.isArray(data)) return [];
 
-    // Aggregate by building
     const buildingMap = new Map();
 
     data.forEach(item => {
@@ -26,127 +21,96 @@ const BuildingRiskView = ({ data, onBuildingClick }) => {
         });
       }
 
-      const building = buildingMap.get(key);
-      building.total_impact += item.total_impact || 0;
-      building.total_cost += item.total_cost || 0;
-      building.defect_count += item.count || 0;
-      building.defect_types.add(item.defect_category);
+      const b = buildingMap.get(key);
+      b.total_impact += item.total_impact || 0;
+      b.total_cost += item.total_cost || 0;
+      b.defect_count += item.count || 0;
+      if (item.defect_category) b.defect_types.add(item.defect_category);
     });
 
-    // Convert to array and sort by impact
     return Array.from(buildingMap.values())
       .map(b => ({ ...b, unique_defects: b.defect_types.size }))
       .sort((a, b) => b.total_impact - a.total_impact)
-      .slice(0, 12); // Top 12 buildings
+      .slice(0, 20);
   }, [data]);
 
-  const formatCurrency = (value) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(value);
-  };
+  const formatCurrency = (value) =>
+    new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(value);
 
-  const formatNumber = (value) => {
-    return new Intl.NumberFormat('en-US').format(value);
-  };
+  const formatNumber = (value) =>
+    new Intl.NumberFormat('en-US').format(value);
 
   const getRiskLevel = (impact, maxImpact) => {
-    const percentage = (impact / maxImpact) * 100;
-    if (percentage >= 70) return { level: 'Critical', color: '#ef4444', bgColor: 'rgba(239, 68, 68, 0.15)' };
-    if (percentage >= 50) return { level: 'High', color: '#f97316', bgColor: 'rgba(249, 115, 22, 0.15)' };
-    if (percentage >= 30) return { level: 'Medium', color: '#eab308', bgColor: 'rgba(234, 179, 8, 0.15)' };
-    return { level: 'Low', color: '#22c55e', bgColor: 'rgba(34, 197, 94, 0.15)' };
+    const pct = (impact / maxImpact) * 100;
+    if (pct >= 70) return { level: 'Critical', color: '#ef4444', bgColor: 'rgba(239,68,68,0.1)' };
+    if (pct >= 50) return { level: 'High',     color: '#f97316', bgColor: 'rgba(249,115,22,0.1)' };
+    if (pct >= 30) return { level: 'Medium',   color: '#eab308', bgColor: 'rgba(234,179,8,0.1)' };
+    return             { level: 'Low',      color: '#22c55e', bgColor: 'rgba(34,197,94,0.1)' };
   };
 
-  if (!topBuildings || topBuildings.length === 0) {
+  if (!rankedBuildings || rankedBuildings.length === 0) {
     return (
-      <div className="building-risk-empty">
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '60px 20px', color: '#94a3b8', textAlign: 'center' }}>
         <Building2 size={32} color="#94a3b8" />
-        <p>No building data available</p>
+        <p style={{ marginTop: '12px', fontSize: '14px' }}>No building data available</p>
       </div>
     );
   }
 
-  const maxImpact = topBuildings[0]?.total_impact || 1;
+  const maxImpact = rankedBuildings[0]?.total_impact || 1;
 
   return (
     <div className="building-risk-view">
       <div className="building-risk-header">
         <Building2 size={20} />
         <h3>Building Risk Analysis</h3>
-        <span className="building-subtitle">Top problematic buildings</span>
+        <span className="building-subtitle">Ranked by estimated impact · Top {rankedBuildings.length} buildings</span>
       </div>
 
-      <div className="building-grid">
-        {topBuildings.map((building, index) => {
+      <div className="building-ranked-list">
+        {rankedBuildings.map((building, index) => {
           const risk = getRiskLevel(building.total_impact, maxImpact);
           const impactPercent = (building.total_impact / maxImpact) * 100;
 
           return (
             <div
               key={`${building.building_id}-${index}`}
-              className="building-card"
+              className="building-ranked-item"
               onClick={() => onBuildingClick && onBuildingClick(building.building_id)}
-              style={{
-                cursor: onBuildingClick ? 'pointer' : 'default',
-                borderColor: risk.color
-              }}
+              style={{ cursor: onBuildingClick ? 'pointer' : 'default' }}
             >
-              <div className="building-card-header">
-                <div className="building-icon" style={{ backgroundColor: risk.bgColor, color: risk.color }}>
-                  <Building2 size={20} />
-                </div>
-                <div className="building-title">
-                  <h4>{building.building_name}</h4>
-                  <p>{building.university_name}</p>
-                </div>
-                <div className="building-risk-badge" style={{ backgroundColor: risk.bgColor, color: risk.color }}>
-                  {risk.level}
-                </div>
+              <div className="building-rank" style={{ backgroundColor: risk.bgColor, color: risk.color }}>
+                {index + 1}
               </div>
 
-              <div className="building-impact-bar-container">
-                <div
-                  className="building-impact-bar"
-                  style={{
-                    width: `${impactPercent}%`,
-                    backgroundColor: risk.color
-                  }}
-                />
-              </div>
+              <div className="building-details">
+                <div className="building-name-row">
+                  <span className="building-name">{building.building_name}</span>
+                  <span className="building-risk-badge" style={{ backgroundColor: risk.bgColor, color: risk.color }}>
+                    {risk.level}
+                  </span>
+                </div>
+                <span className="building-university">{building.university_name}</span>
 
-              <div className="building-stats">
-                <div className="building-stat">
-                  <div className="stat-icon" style={{ color: '#ef4444' }}>
-                    <DollarSign size={16} />
-                  </div>
-                  <div className="stat-content">
-                    <span className="stat-value">{formatCurrency(building.total_impact)}</span>
-                    <span className="stat-label">Total Impact</span>
-                  </div>
+                <div className="building-impact-bar-container">
+                  <div className="building-impact-bar" style={{ width: `${impactPercent}%`, backgroundColor: risk.color }} />
                 </div>
 
-                <div className="building-stat">
-                  <div className="stat-icon" style={{ color: '#f59e0b' }}>
-                    <AlertCircle size={16} />
-                  </div>
-                  <div className="stat-content">
-                    <span className="stat-value">{formatNumber(building.defect_count)}</span>
-                    <span className="stat-label">Defects</span>
-                  </div>
-                </div>
-
-                <div className="building-stat">
-                  <div className="stat-icon" style={{ color: '#3b82f6' }}>
-                    <Wrench size={16} />
-                  </div>
-                  <div className="stat-content">
-                    <span className="stat-value">{building.unique_defects}</span>
-                    <span className="stat-label">Types</span>
-                  </div>
+                <div className="building-stats-row">
+                  <span className="building-stat-item" style={{ color: '#ef4444' }}>
+                    <DollarSign size={12} style={{ verticalAlign: 'middle' }} />
+                    {formatCurrency(building.total_impact)}
+                  </span>
+                  <span className="building-stat-item" style={{ color: '#f59e0b' }}>
+                    <AlertCircle size={12} style={{ verticalAlign: 'middle' }} />
+                    {formatNumber(building.defect_count)} defects
+                  </span>
+                  {building.unique_defects > 0 && (
+                    <span className="building-stat-item" style={{ color: '#3b82f6' }}>
+                      <Wrench size={12} style={{ verticalAlign: 'middle' }} />
+                      {building.unique_defects} types
+                    </span>
+                  )}
                 </div>
               </div>
             </div>
@@ -182,74 +146,78 @@ const BuildingRiskView = ({ data, onBuildingClick }) => {
           color: #94a3b8;
         }
 
-        .building-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-          gap: 16px;
+        .building-ranked-list {
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
           max-height: 600px;
           overflow-y: auto;
         }
 
-        .building-card {
+        .building-ranked-item {
+          display: flex;
+          gap: 16px;
+          padding: 14px 16px;
           background: #0f172a;
           border-radius: 8px;
-          padding: 16px;
-          border: 2px solid #334155;
+          border: 1px solid #334155;
           transition: all 0.2s;
         }
 
-        .building-card:hover {
-          transform: translateY(-4px);
-          box-shadow: 0 8px 16px rgba(0, 0, 0, 0.4);
+        .building-ranked-item:hover {
+          border-color: #475569;
+          transform: translateX(4px);
         }
 
-        .building-card-header {
-          display: flex;
-          align-items: flex-start;
-          gap: 12px;
-          margin-bottom: 16px;
-        }
-
-        .building-icon {
-          width: 40px;
-          height: 40px;
-          border-radius: 8px;
+        .building-rank {
           display: flex;
           align-items: center;
           justify-content: center;
+          width: 40px;
+          height: 40px;
+          border-radius: 8px;
+          font-weight: 700;
+          font-size: 18px;
           flex-shrink: 0;
         }
 
-        .building-title {
+        .building-details {
           flex: 1;
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
           min-width: 0;
         }
 
-        .building-title h4 {
-          margin: 0;
+        .building-name-row {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+        }
+
+        .building-name {
           color: #f1f5f9;
-          font-size: 15px;
           font-weight: 600;
+          font-size: 15px;
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
         }
 
-        .building-title p {
-          margin: 4px 0 0 0;
-          color: #94a3b8;
+        .building-university {
+          color: #64748b;
           font-size: 12px;
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
+          margin-top: -4px;
         }
 
         .building-risk-badge {
-          padding: 4px 10px;
+          padding: 3px 10px;
           border-radius: 12px;
           font-size: 11px;
           font-weight: 700;
           white-space: nowrap;
+          flex-shrink: 0;
         }
 
         .building-impact-bar-container {
@@ -258,7 +226,6 @@ const BuildingRiskView = ({ data, onBuildingClick }) => {
           background: #334155;
           border-radius: 3px;
           overflow: hidden;
-          margin-bottom: 16px;
         }
 
         .building-impact-bar {
@@ -267,98 +234,24 @@ const BuildingRiskView = ({ data, onBuildingClick }) => {
           transition: width 0.3s ease;
         }
 
-        .building-stats {
+        .building-stats-row {
           display: flex;
-          flex-direction: column;
-          gap: 12px;
+          gap: 16px;
+          flex-wrap: wrap;
         }
 
-        .building-stat {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-        }
-
-        .stat-icon {
-          width: 32px;
-          height: 32px;
-          border-radius: 6px;
-          background: rgba(255, 255, 255, 0.05);
+        .building-stat-item {
           display: flex;
           align-items: center;
-          justify-content: center;
-          flex-shrink: 0;
+          gap: 4px;
+          font-size: 12px;
+          font-weight: 500;
         }
 
-        .stat-content {
-          display: flex;
-          flex-direction: column;
-          gap: 2px;
-          flex: 1;
-          min-width: 0;
-        }
-
-        .stat-value {
-          color: #f1f5f9;
-          font-size: 14px;
-          font-weight: 600;
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-        }
-
-        .stat-label {
-          color: #64748b;
-          font-size: 11px;
-          text-transform: uppercase;
-          letter-spacing: 0.5px;
-        }
-
-        .building-risk-empty {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          padding: 60px 20px;
-          color: #94a3b8;
-          text-align: center;
-        }
-
-        .building-risk-empty p {
-          margin-top: 12px;
-          font-size: 14px;
-        }
-
-        /* Scrollbar styling */
-        .building-grid::-webkit-scrollbar {
-          width: 8px;
-        }
-
-        .building-grid::-webkit-scrollbar-track {
-          background: #1e293b;
-          border-radius: 4px;
-        }
-
-        .building-grid::-webkit-scrollbar-thumb {
-          background: #475569;
-          border-radius: 4px;
-        }
-
-        .building-grid::-webkit-scrollbar-thumb:hover {
-          background: #64748b;
-        }
-
-        @media (max-width: 1200px) {
-          .building-grid {
-            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-          }
-        }
-
-        @media (max-width: 768px) {
-          .building-grid {
-            grid-template-columns: 1fr;
-          }
-        }
+        .building-ranked-list::-webkit-scrollbar { width: 8px; }
+        .building-ranked-list::-webkit-scrollbar-track { background: #1e293b; border-radius: 4px; }
+        .building-ranked-list::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; }
+        .building-ranked-list::-webkit-scrollbar-thumb:hover { background: #64748b; }
       `}</style>
     </div>
   );
