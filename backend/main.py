@@ -723,8 +723,13 @@ async def get_defect_intelligence(
         df = df.sort_values('WOStartDate', ascending=False).head(limit)
 
         universities = [{'id': uid, 'name': f'University {uid}'} for uid in univ_ids]
-        buildings = df_defects[df_defects['BuildingID'] != 'nan']['BuildingID'].unique()
-        buildings = [{'id': str(bid), 'name': str(bid)} for bid in buildings][:50]
+        if universityId and universityId != 'all':
+            df_for_buildings = df_defects[df_defects['UniversityID'] == int(universityId)]
+        else:
+            df_for_buildings = df_defects
+        buildings_raw = df_for_buildings['BuildingID'].dropna().unique()
+        buildings_raw = [b for b in buildings_raw if str(b) != 'nan']
+        buildings = sorted([{'id': str(bid), 'name': str(bid)} for bid in buildings_raw], key=lambda x: x['id'])
         all_defect_types = df_defects['topic_id'].apply(
             lambda tid: create_defect_label(topic_to_name.get(tid, f'topic_{tid}'), tid)
         ).unique().tolist()
