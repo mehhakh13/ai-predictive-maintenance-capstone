@@ -15,15 +15,60 @@ import json
 import os
 from pathlib import Path
 from datetime import datetime
+import re
 
 PROJECT_ROOT = Path(__file__).parent.parent
 
 app = FastAPI(title="PredicX API", version="1.0.0")
 
+# Determine allowed CORS origins based on environment
+def get_cors_origins():
+    """
+    Get allowed CORS origins based on environment.
+    Supports both local development and GitHub Codespaces.
+    """
+    # Default localhost origins for local development
+    origins = [
+        "http://localhost:3000",
+        "http://localhost:5173",
+        "http://localhost:5174",
+        "http://localhost:5175",
+    ]
+
+    # Check if running in GitHub Codespaces
+    codespace_name = os.getenv("CODESPACE_NAME")
+    if codespace_name:
+        # Add Codespaces URLs for common frontend ports
+        for port in [3000, 5173, 5174, 5175]:
+            origins.append(f"https://{codespace_name}-{port}.app.github.dev")
+        print(f"🚀 Codespaces detected: {codespace_name}")
+        print(f"✓ CORS enabled for Codespaces URLs")
+
+    return origins
+
+# Custom CORS middleware that also allows regex patterns for Codespaces
+class CustomCORSMiddleware(CORSMiddleware):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Pattern to match any GitHub Codespaces URL
+        self.codespaces_pattern = re.compile(r'^https://[a-z0-9-]+-\d+\.app\.github\.dev$')
+
+    def is_allowed_origin(self, origin: str) -> bool:
+        # Check explicit allowed origins first
+        if origin in self.allow_origins:
+            return True
+        # Check if it matches Codespaces pattern
+        if self.codespaces_pattern.match(origin):
+            return True
+        # Check wildcard
+        if "*" in self.allow_origins:
+            return True
+        return False
+
 # CORS middleware for React frontend
 app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:5173", "http://localhost:5174", "http://localhost:5175"],
+    CustomCORSMiddleware,
+    allow_origins=get_cors_origins(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
