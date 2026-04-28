@@ -2,25 +2,25 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 
 const API = '/api/risk-heatmap';
 
-export const useRiskHeatmapData = (selectedUniversity, selectedBuilding) => {
+export const useRiskHeatmapData = (selectedUniversity, selectedBuilding, selectedYear) => {
   const [universityData, setUniversityData] = useState([]);
   const [metadata, setMetadata] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Per-building cache so we don't re-fetch on every re-render
   const buildingCache = useRef({});
   const [buildingData, setBuildingData] = useState([]);
 
-  // Load university-level data + metadata once on mount
+  // Reload university data when university or year changes
   useEffect(() => {
     const load = async () => {
       try {
         setLoading(true);
         setError(null);
 
+        const yearParam = selectedYear ? `&year=${selectedYear}` : '';
         const [uniRes, metaRes] = await Promise.all([
-          fetch(`${API}/university?universityId=${selectedUniversity}`),
+          fetch(`${API}/university?universityId=${selectedUniversity}${yearParam}`),
           fetch(`${API}/metadata`),
         ]);
 
@@ -39,17 +39,22 @@ export const useRiskHeatmapData = (selectedUniversity, selectedBuilding) => {
     };
 
     load();
-  }, [selectedUniversity]);
+  }, [selectedUniversity, selectedYear]);
 
-  // Lazily fetch building-level data when a specific building is selected
+  // Lazily fetch building data; invalidate cache when year changes
+  useEffect(() => {
+    buildingCache.current = {};
+  }, [selectedYear]);
+
   useEffect(() => {
     if (!selectedBuilding || selectedBuilding === 'all') {
       setBuildingData([]);
       return;
     }
 
-    if (buildingCache.current[selectedBuilding]) {
-      setBuildingData(buildingCache.current[selectedBuilding]);
+    const cacheKey = `${selectedBuilding}_${selectedYear || 'all'}`;
+    if (buildingCache.current[cacheKey]) {
+      setBuildingData(buildingCache.current[cacheKey]);
       return;
     }
 
@@ -60,7 +65,7 @@ export const useRiskHeatmapData = (selectedUniversity, selectedBuilding) => {
         );
         if (!res.ok) throw new Error(`Building heatmap: ${res.status}`);
         const rows = await res.json();
-        buildingCache.current[selectedBuilding] = rows;
+        buildingCache.current[cacheKey] = rows;
         setBuildingData(rows);
       } catch (err) {
         console.error('Failed to load building data:', err);
@@ -69,9 +74,8 @@ export const useRiskHeatmapData = (selectedUniversity, selectedBuilding) => {
     };
 
     fetchBuilding();
-  }, [selectedBuilding, selectedUniversity]);
+  }, [selectedBuilding, selectedUniversity, selectedYear]);
 
-  // Aggregate to system-level for the main heatmap
   const filteredData = useMemo(() => {
     if (!universityData.length && !buildingData.length) {
       return { mlHeatmap: [], historicalHeatmap: [], subsystemData: [], metadata };
@@ -90,7 +94,6 @@ export const useRiskHeatmapData = (selectedUniversity, selectedBuilding) => {
       coverage: row.coverage,
     }));
 
-    // Roll up subsystems → systems
     const bySystemMonth = {};
     source.forEach(row => {
       const key = `${row.SystemDescription}_${row.MonthNum}`;

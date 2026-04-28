@@ -6,18 +6,21 @@ import SubsystemHeatmap from '../components/RiskHeatmap/SubsystemHeatmap';
 import InsightsPanel from '../components/RiskHeatmap/InsightsPanel';
 import RiskCharts from '../components/RiskHeatmap/RiskCharts';
 import CellDetailModal from '../components/RiskHeatmap/CellDetailModal';
-import { Filter, Eye, EyeOff, Building2, School } from 'lucide-react';
+import { Filter, Eye, EyeOff, Building2, School, CalendarDays } from 'lucide-react';
+import ForecastStrip from '../components/RiskHeatmap/ForecastStrip';
 
 const RiskHeatmapPage = () => {
   // University and Building selection state
-  const [selectedUniversity, setSelectedUniversity] = useState(10); // Default to University 10
-  const [selectedBuilding, setSelectedBuilding] = useState('all'); // Default to "All Buildings"
+  const [selectedUniversity, setSelectedUniversity] = useState(10);
+  const [selectedBuilding, setSelectedBuilding] = useState('all');
+  const [selectedYear, setSelectedYear] = useState(null); // null = all years
   const [availableBuildings, setAvailableBuildings] = useState([]);
+  const [availableYears, setAvailableYears] = useState([]);
 
-  // Load data with filtering
   const { mlHeatmap, historicalHeatmap, subsystemData, metadata, loading, error } = useRiskHeatmapData(
     selectedUniversity,
-    selectedBuilding
+    selectedBuilding,
+    selectedYear
   );
 
   const [selectedCellData, setSelectedCellData] = useState(null);
@@ -28,12 +31,15 @@ const RiskHeatmapPage = () => {
   // Additional filters
   const [systemSearch, setSystemSearch] = useState('');
 
-  // Update available buildings when university changes
+  // Update available buildings and years when university or metadata changes
   useEffect(() => {
     if (metadata && selectedUniversity) {
       const buildings = metadata.buildings_by_university[selectedUniversity] || [];
+      const years = metadata.years_by_university?.[selectedUniversity] || [];
       setAvailableBuildings(buildings);
-      setSelectedBuilding('all'); // Reset to "All Buildings" when university changes
+      setAvailableYears(years);
+      setSelectedBuilding('all');
+      setSelectedYear(null);
     }
   }, [selectedUniversity, metadata]);
 
@@ -117,6 +123,21 @@ const RiskHeatmapPage = () => {
             </select>
           </div>
 
+          {/* Year Filter */}
+          <div className="filter-group">
+            <CalendarDays size={16} />
+            <select
+              className="filter-select"
+              value={selectedYear || 'all'}
+              onChange={(e) => setSelectedYear(e.target.value === 'all' ? null : Number(e.target.value))}
+            >
+              <option value="all">All Years</option>
+              {availableYears.map(y => (
+                <option key={y} value={y}>{y}</option>
+              ))}
+            </select>
+          </div>
+
           {/* System Search */}
           <div className="filter-group search">
             <Filter size={16} />
@@ -139,15 +160,16 @@ const RiskHeatmapPage = () => {
 
       {/* Selection Info */}
       <div style={{ padding: '0 1rem', marginTop: '0.5rem', fontSize: '0.9rem', color: '#666' }}>
-        Showing data for: University {selectedUniversity} - {
-          selectedBuilding === 'all'
-            ? 'All Buildings'
-            : (metadata?.building_names?.[selectedBuilding] || `Building ${selectedBuilding}`)
-        }
+        Showing data for: University {selectedUniversity} —&nbsp;
+        {selectedBuilding === 'all' ? 'All Buildings' : (metadata?.building_names?.[selectedBuilding] || selectedBuilding)}
+        &nbsp;—&nbsp;{selectedYear ? selectedYear : 'All Years (historical avg)'}
       </div>
 
       {/* KPI Cards */}
-      <KpiRow mlHeatmap={mlHeatmap} />
+      <KpiRow mlHeatmap={mlHeatmap} selectedYear={selectedYear} />
+
+      {/* Next 3 Months Forecast — only when viewing all-years data */}
+      {!selectedYear && <ForecastStrip mlHeatmap={mlHeatmap} />}
 
       {/* Main Content - 2 Column Layout */}
       <div className="main-content">
