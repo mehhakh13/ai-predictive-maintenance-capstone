@@ -1,5 +1,24 @@
 # Quick Start Guide: Risk Heatmap with University & Building Filtering
 
+## 🚀 Quick Deploy for Demos (FREE!)
+
+**Want to demo this app publicly in 5 minutes?** Use GitHub Codespaces!
+
+👉 **[See CODESPACES_DEPLOYMENT.md](./CODESPACES_DEPLOYMENT.md)** for full guide
+
+**TL;DR:**
+1. Go to your GitHub repo → Click "Code" → "Codespaces" → "Create codespace"
+2. Wait ~2 minutes for auto-setup
+3. Run: `./start-codespaces.sh`
+4. Set ports 5173 & 8000 to "Public" in Ports tab
+5. Share the frontend URL: `https://your-codespace-name-5173.app.github.dev`
+
+**Free tier:** 60 hours/month (perfect for 1-2 day demos!)
+
+---
+
+## Local Development Setup
+
 ## Prerequisites
 
 - Python 3.x with pandas, numpy, scikit-learn, xgboost
