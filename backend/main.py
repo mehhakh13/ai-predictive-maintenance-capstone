@@ -16,9 +16,15 @@ import os
 from pathlib import Path
 from datetime import datetime
 
+try:
+    from backend.chat_router import router as chat_router, load_derived_data
+except ImportError:
+    from chat_router import router as chat_router, load_derived_data
+
 PROJECT_ROOT = Path(__file__).parent.parent
 
 app = FastAPI(title="PredicX API", version="1.0.0")
+app.include_router(chat_router, prefix="/api")
 
 # CORS middleware for React frontend
 app.add_middleware(
@@ -74,6 +80,9 @@ async def load_model_and_data():
     global model, df_data, feature_importance, df_defects, topic_info
     global df_defect_summary, df_system_defect, df_building_defect, df_monthly_defect, df_impact_summary
     global shap_df, shap_buildings_meta, shap_feature_cols
+
+    # Load NDA-safe derived data for the chat assistant
+    load_derived_data()
 
     try:
         # Load critical data first (fast startup)
