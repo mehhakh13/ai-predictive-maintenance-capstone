@@ -90,7 +90,7 @@ const useAggregatedDefectData = (filters = {}) => {
         setData({
           summary: summaryData.data || [],
           systemDefects: systemData.data || [],
-          buildingDefects: buildingData.top_buildings || [],
+          buildingDefects: buildingData.top_buildings || buildingData.data || [],
           monthlyTrends: monthlyData.data || [],
           impactRanking: impactData.data || [],
           metadata: {

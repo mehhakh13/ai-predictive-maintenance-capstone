@@ -235,7 +235,7 @@ const DefectAnalytics = () => {
       const [recResponse, envResponse, survResponse] = await Promise.all([
         fetch('/data/ml_defect_analytics/recurrence_forecast_comparison.csv'),
         fetch('/data/ml_defect_analytics/environmental_model_comparison.csv'),
-        fetch('/data/ml_defect_analytics/survival_cox_model.json')
+        fetch('/api/defects/survival-model')
       ]);
 
       const [recText, envText, surv] = await Promise.all([
@@ -2024,12 +2024,12 @@ const DefectAnalytics = () => {
         </Tabs>
 
         <Box sx={{ p: 4 }}>
-          {activeTab === 0 && <OverviewTab />}
-          {activeTab === 1 && <RecurrenceTab />}
-          {activeTab === 2 && <SeverityTab />}
-          {activeTab === 3 && <EnvironmentalTab />}
-          {activeTab === 4 && <AIMLPerformanceTab />}
-          {activeTab === 5 && <RecommendationsTab />}
+          {activeTab === 0 && OverviewTab()}
+          {activeTab === 1 && RecurrenceTab()}
+          {activeTab === 2 && SeverityTab()}
+          {activeTab === 3 && EnvironmentalTab()}
+          {activeTab === 4 && AIMLPerformanceTab()}
+          {activeTab === 5 && RecommendationsTab()}
         </Box>
       </Paper>
     </Container>

@@ -123,7 +123,7 @@ async def load_model_and_data():
             df_impact_summary = pd.read_parquet(IMPACT_SUMMARY_PATH)
             print(f"✓ Impact summary loaded: {len(df_impact_summary)} categories")
 
-        print("✓ Server ready - defect data will load on first request")
+        print("✓ Aggregated defect data ready")
     except Exception as e:
         print(f"Error loading aggregated defect data: {e}")
 
@@ -235,17 +235,16 @@ async def load_model_and_data():
 
 
 def load_defect_data_if_needed():
-    """Lazy load large defect intelligence data on first request"""
     global df_defects, topic_info
+
+    if topic_info is None and os.path.exists(TOPIC_INFO_PATH):
+        topic_info = pd.read_csv(TOPIC_INFO_PATH)
+        print(f"✓ Topic info loaded: {len(topic_info)} topics")
 
     if df_defects is None and os.path.exists(DEFECT_DATA_PATH):
         print("Loading defect data (first request)...")
         df_defects = pd.read_parquet(DEFECT_DATA_PATH)
         print(f"✓ Defect data loaded: {len(df_defects)} records")
-
-    if topic_info is None and os.path.exists(TOPIC_INFO_PATH):
-        topic_info = pd.read_csv(TOPIC_INFO_PATH)
-        print(f"✓ Topic info loaded: {len(topic_info)} topics")
 
 
 # Response models
@@ -685,78 +684,52 @@ async def get_defect_intelligence(
         raise HTTPException(status_code=503, detail="Defect data not loaded")
 
     try:
-        # Create a copy for filtering
         df = df_defects.copy()
 
-        # Create defect type labels
         topic_to_name = dict(zip(topic_info['Topic'], topic_info['Name']))
         df['defect_type'] = df['topic_id'].apply(
             lambda tid: create_defect_label(topic_to_name.get(tid, f'topic_{tid}'), tid)
         )
 
-        # Use real TotalCost from FMUCD; fill missing with 0
         df['TotalCost'] = pd.to_numeric(df.get('TotalCost'), errors='coerce').fillna(0)
 
-        # University names — use existing column if present, else derive from actual data
-        if 'university_name' in df.columns:
-            df['UniversityName'] = df['university_name']
-        else:
-            univ_ids = sorted(df['UniversityID'].dropna().unique().astype(int).tolist())
-            university_mapping = {uid: f'University {uid}' for uid in univ_ids}
-            df['UniversityName'] = df['UniversityID'].map(university_mapping).fillna('Unknown University')
+        univ_ids = sorted(df['UniversityID'].dropna().unique().astype(int).tolist())
+        university_mapping = {uid: f'University {uid}' for uid in univ_ids}
+        df['UniversityName'] = df['UniversityID'].map(university_mapping).fillna('Unknown University')
 
-        # Create building names (using BuildingID if available)
         df['BuildingName'] = df['BuildingID'].apply(
-            lambda bid: str(bid) if pd.notna(bid) and bid != 'nan' else 'Unknown'
+            lambda bid: str(bid) if pd.notna(bid) and str(bid) != 'nan' else 'Unknown'
         )
 
-        # Add synthetic status
-        statuses = ['Completed', 'Completed', 'Completed', 'In Progress']  # 75% completed
+        statuses = ['Completed', 'Completed', 'Completed', 'In Progress']
         df['Status'] = [statuses[i % len(statuses)] for i in range(len(df))]
 
-        # Add WOId if not present
         if 'WOId' not in df.columns:
             df['WOId'] = [f'WO-{str(i+1).zfill(6)}' for i in range(len(df))]
 
-        # Apply filters
         if universityId and universityId != 'all':
             df = df[df['UniversityID'] == int(universityId)]
-
         if buildingId and buildingId != 'all':
             df = df[df['BuildingID'] == buildingId]
-
         if defectType and defectType != 'all':
             df = df[df['defect_type'] == defectType]
-
         if system and system != 'all':
             df = df[df['SystemDescription'] == system]
-
         if startDate:
             df = df[pd.to_datetime(df['WOStartDate']) >= pd.to_datetime(startDate)]
-
         if endDate:
             df = df[pd.to_datetime(df['WOStartDate']) <= pd.to_datetime(endDate)]
 
-        # Sort by date (newest first) and limit
         df = df.sort_values('WOStartDate', ascending=False).head(limit)
 
-        # Metadata from full dataset
-        univ_ids = sorted(df_defects['UniversityID'].dropna().unique().astype(int).tolist())
         universities = [{'id': uid, 'name': f'University {uid}'} for uid in univ_ids]
-
         buildings = df_defects[df_defects['BuildingID'] != 'nan']['BuildingID'].unique()
-        buildings = [
-            {'id': str(bid), 'name': str(bid)}
-            for bid in buildings
-        ][:50]
-
-        all_defect_types = df_defects['topic_id'].map(
+        buildings = [{'id': str(bid), 'name': str(bid)} for bid in buildings][:50]
+        all_defect_types = df_defects['topic_id'].apply(
             lambda tid: create_defect_label(topic_to_name.get(tid, f'topic_{tid}'), tid)
         ).unique().tolist()
-
         systems = sorted(df_defects['SystemDescription'].dropna().unique().tolist())
 
-        # Convert to response format
         data = []
         for _, row in df.iterrows():
             data.append({
@@ -1059,6 +1032,16 @@ async def get_defect_impact_ranking(
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error processing impact data: {str(e)}")
+
+
+@app.get("/api/defects/survival-model")
+async def get_survival_model():
+    """Serve Cox survival model results"""
+    survival_path = PROJECT_ROOT / "data" / "ml_defect_analytics" / "survival_cox_model.json"
+    if not survival_path.exists():
+        raise HTTPException(status_code=404, detail="Survival model data not found")
+    with open(survival_path) as f:
+        return json.load(f)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
