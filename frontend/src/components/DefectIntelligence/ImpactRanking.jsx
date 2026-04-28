@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { AlertTriangle, TrendingUp, DollarSign } from 'lucide-react';
+import { AlertTriangle, TrendingUp } from 'lucide-react';
 
 /**
  * Impact Ranking Component
@@ -9,9 +9,7 @@ import { AlertTriangle, TrendingUp, DollarSign } from 'lucide-react';
 const ImpactRanking = ({ data, onDefectClick }) => {
   const sortedData = useMemo(() => {
     if (!data || !Array.isArray(data)) return [];
-    return data
-      .sort((a, b) => b.total_impact - a.total_impact)
-      .slice(0, 15); // Top 15
+    return [...data].sort((a, b) => b.count - a.count).slice(0, 15);
   }, [data]);
 
   const getRiskColor = (riskLevel) => {
@@ -34,15 +32,6 @@ const ImpactRanking = ({ data, onDefectClick }) => {
     return colors[riskLevel] || 'rgba(107, 114, 128, 0.1)';
   };
 
-  const formatCurrency = (value) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(value);
-  };
-
   const formatNumber = (value) => {
     return new Intl.NumberFormat('en-US').format(value);
   };
@@ -56,19 +45,19 @@ const ImpactRanking = ({ data, onDefectClick }) => {
     );
   }
 
-  const maxImpact = sortedData[0]?.total_impact || 1;
+  const maxImpact = sortedData[0]?.count || 1;
 
   return (
     <div className="impact-ranking">
       <div className="impact-ranking-header">
         <TrendingUp size={20} />
         <h3>Defect Impact Ranking</h3>
-        <span className="impact-subtitle">Ranked by impact score (cost × priority)</span>
+        <span className="impact-subtitle">Ranked by occurrence count</span>
       </div>
 
       <div className="impact-list">
         {sortedData.map((defect, index) => {
-          const impactPercent = (defect.total_impact / maxImpact) * 100;
+          const impactPercent = (defect.count / maxImpact) * 100;
           const riskColor = getRiskColor(defect.risk_level);
           const riskBgColor = getRiskBgColor(defect.risk_level);
 
@@ -103,14 +92,7 @@ const ImpactRanking = ({ data, onDefectClick }) => {
 
                 <div className="impact-stats">
                   <div className="impact-stat">
-                    <DollarSign size={14} />
-                    <span>{formatCurrency(defect.total_impact)} impact</span>
-                  </div>
-                  <div className="impact-stat">
                     <span>{formatNumber(defect.count)} occurrences</span>
-                  </div>
-                  <div className="impact-stat">
-                    <span>{formatCurrency(defect.total_cost)} total cost</span>
                   </div>
                 </div>
               </div>

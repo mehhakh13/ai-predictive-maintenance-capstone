@@ -30,19 +30,19 @@ app.add_middleware(
 )
 
 # Load model and data on startup
-MODEL_PATH = "/home/sradmin/ai-predictive-maintenance-capstone/models/xgboost_upm_predictor.pkl"
-DATA_PATH = "/home/sradmin/ai-predictive-maintenance-capstone/data/processed/system_month_data.csv"
-IMPORTANCE_PATH = "/home/sradmin/ai-predictive-maintenance-capstone/models/feature_importance.csv"
-DEFECT_DATA_PATH = "/home/sradmin/ai-predictive-maintenance-capstone/data/bertopic/df_with_topics_IMPROVED.parquet"
-TOPIC_INFO_PATH = "/home/sradmin/ai-predictive-maintenance-capstone/data/bertopic/topic_info_IMPROVED.csv"
+MODEL_PATH = PROJECT_ROOT / "models" / "xgboost_upm_predictor.pkl"
+DATA_PATH = PROJECT_ROOT / "data" / "processed" / "system_month_data.csv"
+IMPORTANCE_PATH = PROJECT_ROOT / "models" / "feature_importance.csv"
+DEFECT_DATA_PATH = PROJECT_ROOT / "data" / "bertopic" / "df_with_topics_IMPROVED.parquet"
+TOPIC_INFO_PATH = PROJECT_ROOT / "data" / "bertopic" / "topic_info_IMPROVED.csv"
 
 # Aggregated defect intelligence data paths
-AGG_DATA_DIR = "/home/sradmin/ai-predictive-maintenance-capstone/data/defect_intelligence/aggregated"
-DEFECT_SUMMARY_PATH = f"{AGG_DATA_DIR}/defect_summary.parquet"
-SYSTEM_DEFECT_PATH = f"{AGG_DATA_DIR}/system_defect.parquet"
-BUILDING_DEFECT_PATH = f"{AGG_DATA_DIR}/building_defect.parquet"
-MONTHLY_DEFECT_PATH = f"{AGG_DATA_DIR}/monthly_defect.parquet"
-IMPACT_SUMMARY_PATH = f"{AGG_DATA_DIR}/impact_summary.parquet"
+AGG_DATA_DIR = PROJECT_ROOT / "data" / "defect_intelligence" / "aggregated"
+DEFECT_SUMMARY_PATH = AGG_DATA_DIR / "defect_summary.parquet"
+SYSTEM_DEFECT_PATH = AGG_DATA_DIR / "system_defect.parquet"
+BUILDING_DEFECT_PATH = AGG_DATA_DIR / "building_defect.parquet"
+MONTHLY_DEFECT_PATH = AGG_DATA_DIR / "monthly_defect.parquet"
+IMPACT_SUMMARY_PATH = AGG_DATA_DIR / "impact_summary.parquet"
 
 model = None
 df_data = None
@@ -82,21 +82,27 @@ async def load_model_and_data():
     global shap_df, shap_buildings_meta, shap_feature_cols
     global df_risk_building, df_risk_university, df_risk_university_yearly, risk_heatmap_meta
 
+    # Model (optional — fails gracefully if xgboost not installed)
     try:
-        # Load critical data first (fast startup)
         if os.path.exists(MODEL_PATH):
             model = joblib.load(MODEL_PATH)
             print("✓ Model loaded")
-
-        if os.path.exists(DATA_PATH):
-            df_data = pd.read_csv(DATA_PATH)
-            print(f"✓ Data loaded: {len(df_data)} records")
-
         if os.path.exists(IMPORTANCE_PATH):
             feature_importance = pd.read_csv(IMPORTANCE_PATH)
             print("✓ Feature importance loaded")
+    except Exception as e:
+        print(f"Warning: model not loaded: {e}")
 
-        # Load aggregated data (small, fast)
+    # Processed data (loaded independently of model)
+    try:
+        if os.path.exists(DATA_PATH):
+            df_data = pd.read_csv(DATA_PATH)
+            print(f"✓ Data loaded: {len(df_data)} records")
+    except Exception as e:
+        print(f"Warning: processed data not loaded: {e}")
+
+    # Aggregated defect intelligence data (small parquets, fast)
+    try:
         if os.path.exists(DEFECT_SUMMARY_PATH):
             df_defect_summary = pd.read_parquet(DEFECT_SUMMARY_PATH)
             print(f"✓ Defect summary loaded: {len(df_defect_summary)} categories")
@@ -117,11 +123,9 @@ async def load_model_and_data():
             df_impact_summary = pd.read_parquet(IMPACT_SUMMARY_PATH)
             print(f"✓ Impact summary loaded: {len(df_impact_summary)} categories")
 
-        # Load large defect data in background (lazy loading)
-        print("✓ Server ready - defect data will load on first request")
-
+        print("✓ Aggregated defect data ready")
     except Exception as e:
-        print(f"Error loading model/data: {e}")
+        print(f"Error loading aggregated defect data: {e}")
 
     # Load Risk Heatmap data from FMUCD CSV (has SubsystemDescription + BuildingName)
     try:
@@ -231,17 +235,16 @@ async def load_model_and_data():
 
 
 def load_defect_data_if_needed():
-    """Lazy load large defect intelligence data on first request"""
     global df_defects, topic_info
+
+    if topic_info is None and os.path.exists(TOPIC_INFO_PATH):
+        topic_info = pd.read_csv(TOPIC_INFO_PATH)
+        print(f"✓ Topic info loaded: {len(topic_info)} topics")
 
     if df_defects is None and os.path.exists(DEFECT_DATA_PATH):
         print("Loading defect data (first request)...")
         df_defects = pd.read_parquet(DEFECT_DATA_PATH)
         print(f"✓ Defect data loaded: {len(df_defects)} records")
-
-    if topic_info is None and os.path.exists(TOPIC_INFO_PATH):
-        topic_info = pd.read_csv(TOPIC_INFO_PATH)
-        print(f"✓ Topic info loaded: {len(topic_info)} topics")
 
 
 # Response models
@@ -681,83 +684,57 @@ async def get_defect_intelligence(
         raise HTTPException(status_code=503, detail="Defect data not loaded")
 
     try:
-        # Create a copy for filtering
         df = df_defects.copy()
 
-        # Create defect type labels
         topic_to_name = dict(zip(topic_info['Topic'], topic_info['Name']))
         df['defect_type'] = df['topic_id'].apply(
             lambda tid: create_defect_label(topic_to_name.get(tid, f'topic_{tid}'), tid)
         )
 
-        # Generate synthetic costs (DMC field in raw data is empty, so we estimate based on defect type)
-        # Cost calculation uses: defect complexity, priority, and duration from real work orders
-        np.random.seed(42)  # For reproducibility
-        df['TotalCost'] = df.apply(lambda row: calculate_defect_cost(row, row['topic_id']), axis=1)
+        df['TotalCost'] = pd.to_numeric(df.get('TotalCost'), errors='coerce').fillna(0)
 
-        # Create university names
-        university_mapping = {10: 'University 10', 11: 'University 11', 12: 'University 12'}
+        univ_ids = sorted(df['UniversityID'].dropna().unique().astype(int).tolist())
+        university_mapping = {uid: f'University {uid}' for uid in univ_ids}
         df['UniversityName'] = df['UniversityID'].map(university_mapping).fillna('Unknown University')
 
-        # Create building names (using BuildingID if available)
         df['BuildingName'] = df['BuildingID'].apply(
-            lambda bid: str(bid) if pd.notna(bid) and bid != 'nan' else 'Unknown'
+            lambda bid: str(bid) if pd.notna(bid) and str(bid) != 'nan' else 'Unknown'
         )
 
-        # Add synthetic status
-        statuses = ['Completed', 'Completed', 'Completed', 'In Progress']  # 75% completed
+        statuses = ['Completed', 'Completed', 'Completed', 'In Progress']
         df['Status'] = [statuses[i % len(statuses)] for i in range(len(df))]
 
-        # Add WOId if not present
         if 'WOId' not in df.columns:
             df['WOId'] = [f'WO-{str(i+1).zfill(6)}' for i in range(len(df))]
 
-        # Apply filters
         if universityId and universityId != 'all':
             df = df[df['UniversityID'] == int(universityId)]
-
         if buildingId and buildingId != 'all':
             df = df[df['BuildingID'] == buildingId]
-
         if defectType and defectType != 'all':
             df = df[df['defect_type'] == defectType]
-
         if system and system != 'all':
             df = df[df['SystemDescription'] == system]
-
         if startDate:
             df = df[pd.to_datetime(df['WOStartDate']) >= pd.to_datetime(startDate)]
-
         if endDate:
             df = df[pd.to_datetime(df['WOStartDate']) <= pd.to_datetime(endDate)]
 
-        # Sort by date (newest first) and limit
         df = df.sort_values('WOStartDate', ascending=False).head(limit)
 
-        # Prepare metadata (from full dataset for filter options)
-        universities = [
-            {'id': int(uid), 'name': name}
-            for uid, name in university_mapping.items()
-        ]
-
-        buildings = df_defects['BuildingID'].dropna().unique()
-        buildings = [
-            {'id': str(bid), 'name': str(bid)}
-            for bid in buildings if bid != 'nan'
-        ][:50]  # Limit to 50 buildings
-
-        all_defect_types = df_defects['topic_id'].map(
+        universities = [{'id': uid, 'name': f'University {uid}'} for uid in univ_ids]
+        buildings = df_defects[df_defects['BuildingID'] != 'nan']['BuildingID'].unique()
+        buildings = [{'id': str(bid), 'name': str(bid)} for bid in buildings][:50]
+        all_defect_types = df_defects['topic_id'].apply(
             lambda tid: create_defect_label(topic_to_name.get(tid, f'topic_{tid}'), tid)
         ).unique().tolist()
-
         systems = sorted(df_defects['SystemDescription'].dropna().unique().tolist())
 
-        # Convert to response format
         data = []
         for _, row in df.iterrows():
             data.append({
-                'WOId': row.get('WOId', 'N/A'),
-                'WODescription': row['WODescription'][:200] if pd.notna(row['WODescription']) else 'N/A',
+                'WOId': str(row.get('WOId', 'N/A')),
+                'WODescription': row['WODescription'][:200] if pd.notna(row.get('WODescription')) else 'N/A',
                 'defect_type': row['defect_type'],
                 'SystemDescription': row['SystemDescription'],
                 'BuildingID': str(row['BuildingID']) if pd.notna(row['BuildingID']) else None,
@@ -766,7 +743,7 @@ async def get_defect_intelligence(
                 'BuildingName': row['BuildingName'],
                 'TotalCost': float(row['TotalCost']),
                 'WOStartDate': str(row['WOStartDate'])[:10],
-                'WOPriority': str(row['WOPriority']) if pd.notna(row['WOPriority']) else None,
+                'WOPriority': str(row['WOPriority']) if pd.notna(row.get('WOPriority')) else None,
                 'Status': row['Status'],
                 'topic_id': int(row['topic_id'])
             })
@@ -1055,6 +1032,16 @@ async def get_defect_impact_ranking(
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error processing impact data: {str(e)}")
+
+
+@app.get("/api/defects/survival-model")
+async def get_survival_model():
+    """Serve Cox survival model results"""
+    survival_path = PROJECT_ROOT / "data" / "ml_defect_analytics" / "survival_cox_model.json"
+    if not survival_path.exists():
+        raise HTTPException(status_code=404, detail="Survival model data not found")
+    with open(survival_path) as f:
+        return json.load(f)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

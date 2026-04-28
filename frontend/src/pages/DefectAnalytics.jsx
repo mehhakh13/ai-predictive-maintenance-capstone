@@ -235,7 +235,7 @@ const DefectAnalytics = () => {
       const [recResponse, envResponse, survResponse] = await Promise.all([
         fetch('/data/ml_defect_analytics/recurrence_forecast_comparison.csv'),
         fetch('/data/ml_defect_analytics/environmental_model_comparison.csv'),
-        fetch('/data/ml_defect_analytics/survival_cox_model.json')
+        fetch('/api/defects/survival-model')
       ]);
 
       const [recText, envText, surv] = await Promise.all([
@@ -1091,9 +1091,22 @@ const DefectAnalytics = () => {
     }
 
     const topSensitive = data
-      .filter(row => Math.abs(row.strongest_correlation || 0) > 0.1)
+      .filter(row => row.strongest_correlation !== '' && row.strongest_correlation != null && Math.abs(row.strongest_correlation || 0) > 0.1)
       .sort((a, b) => Math.abs(b.strongest_correlation || 0) - Math.abs(a.strongest_correlation || 0))
       .slice(0, 15);
+
+    if (topSensitive.length === 0) {
+      return (
+        <Box sx={{ textAlign: 'center', py: 8 }}>
+          <Typography variant="h6" color="text.secondary">
+            No environmental sensitivity data available for this selection.
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+            Select a specific university to view environmental correlation data.
+          </Typography>
+        </Box>
+      );
+    }
 
     // Group by weather factor
     const weatherFactorGroups = topSensitive.reduce((acc, row) => {
@@ -1129,7 +1142,7 @@ const DefectAnalytics = () => {
           <ResponsiveContainer width="100%" height={450}>
             <BarChart data={topSensitive} layout="horizontal" margin={{ left: 120, right: 30 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis type="number" domain={[0, 1]} stroke="#666" />
+              <XAxis type="number" domain={[-1, 1]} stroke="#666" />
               <YAxis
                 type="category"
                 dataKey="SubsystemDescription"
@@ -2024,12 +2037,12 @@ const DefectAnalytics = () => {
         </Tabs>
 
         <Box sx={{ p: 4 }}>
-          {activeTab === 0 && <OverviewTab />}
-          {activeTab === 1 && <RecurrenceTab />}
-          {activeTab === 2 && <SeverityTab />}
-          {activeTab === 3 && <EnvironmentalTab />}
-          {activeTab === 4 && <AIMLPerformanceTab />}
-          {activeTab === 5 && <RecommendationsTab />}
+          {activeTab === 0 && OverviewTab()}
+          {activeTab === 1 && RecurrenceTab()}
+          {activeTab === 2 && SeverityTab()}
+          {activeTab === 3 && EnvironmentalTab()}
+          {activeTab === 4 && AIMLPerformanceTab()}
+          {activeTab === 5 && RecommendationsTab()}
         </Box>
       </Paper>
     </Container>

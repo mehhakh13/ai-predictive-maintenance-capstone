@@ -108,8 +108,8 @@ def calculate_defect_cost(row, topic_id):
     final_cost = base_cost * priority_multiplier * duration_multiplier * np.random.uniform(0.8, 1.2)
     return round(final_cost, 2)
 
-np.random.seed(42)
-df['TotalCost'] = df.apply(lambda row: calculate_defect_cost(row, row['topic_id']), axis=1)
+# Use real TotalCost from FMUCD data; fill missing with 0
+df['TotalCost'] = pd.to_numeric(df['TotalCost'], errors='coerce').fillna(0)
 
 # Add university names
 university_mapping = {10: 'University 10', 11: 'University 11', 12: 'University 12'}
@@ -189,16 +189,15 @@ print(f"✓ Saved monthly_defect.parquet ({len(monthly_defect)} records)")
 # ============================================================================
 print("\nGenerating impact ranking...")
 impact_summary = defect_summary.copy()
-impact_summary['total_impact'] = impact_summary['total_cost'] * impact_summary['count']
 
-# Assign risk levels
+# Risk level based on occurrence count (no cost dependency)
 impact_summary['risk_level'] = pd.cut(
-    impact_summary['total_impact'],
-    bins=[0, 50000, 100000, 200000, float('inf')],
+    impact_summary['count'],
+    bins=[0, 5000, 20000, 80000, float('inf')],
     labels=['Low', 'Medium', 'High', 'Critical']
 )
 
-impact_summary = impact_summary.sort_values('total_impact', ascending=False)
+impact_summary = impact_summary.sort_values('count', ascending=False)
 
 impact_summary.to_parquet(OUTPUT_DIR / "impact_summary.parquet", index=False)
 print(f"✓ Saved impact_summary.parquet ({len(impact_summary)} categories)")
