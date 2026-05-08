@@ -78,46 +78,30 @@ export const useDefectData = (filters = {}) => {
       return {
         totalDefects: 0,
         mostFrequentDefect: { name: 'N/A', count: 0 },
-        highestCostDefect: { name: 'N/A', cost: 0 },
         mostAffectedSystem: { name: 'N/A', count: 0 },
-        totalCost: 0
+        uniqueDefectTypes: 0
       };
     }
 
-    // Group by defect type
     const defectCounts = {};
-    const defectCosts = {};
     const systemCounts = {};
 
     rawData.forEach(item => {
-      // Defect counts
       defectCounts[item.defect_type] = (defectCounts[item.defect_type] || 0) + 1;
 
-      // Defect costs
-      defectCosts[item.defect_type] = (defectCosts[item.defect_type] || 0) + item.TotalCost;
-
-      // System counts
-      systemCounts[item.SystemDescription] = (systemCounts[item.SystemDescription] || 0) + 1;
+      if (item.SystemDescription) {
+        systemCounts[item.SystemDescription] = (systemCounts[item.SystemDescription] || 0) + 1;
+      }
     });
 
-    // Find most frequent defect
-    const mostFrequent = Object.entries(defectCounts).sort((a, b) => b[1] - a[1])[0];
-
-    // Find highest cost defect
-    const highestCost = Object.entries(defectCosts).sort((a, b) => b[1] - a[1])[0];
-
-    // Find most affected system
-    const mostAffected = Object.entries(systemCounts).sort((a, b) => b[1] - a[1])[0];
-
-    // Total cost
-    const totalCost = rawData.reduce((sum, item) => sum + item.TotalCost, 0);
+    const mostFrequent = Object.entries(defectCounts).sort((a, b) => b[1] - a[1])[0] || ['N/A', 0];
+    const mostAffected = Object.entries(systemCounts).sort((a, b) => b[1] - a[1])[0] || ['N/A', 0];
 
     return {
       totalDefects: rawData.length,
       mostFrequentDefect: { name: mostFrequent[0], count: mostFrequent[1] },
-      highestCostDefect: { name: highestCost[0], cost: highestCost[1] },
       mostAffectedSystem: { name: mostAffected[0], count: mostAffected[1] },
-      totalCost
+      uniqueDefectTypes: Object.keys(defectCounts).length
     };
   }, [rawData]);
 

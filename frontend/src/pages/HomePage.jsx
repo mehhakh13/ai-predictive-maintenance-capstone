@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { LayoutDashboard, TrendingUp, AlertCircle, BarChart3, DollarSign } from 'lucide-react';
+import { LayoutDashboard, BarChart3, DollarSign, Wrench, LineChart } from 'lucide-react';
 
 const HomePage = () => {
   const dashboards = [
@@ -21,25 +21,25 @@ const HomePage = () => {
       featured: true
     },
     {
-      title: 'Prediction Dashboard',
-      description: 'Make predictions for individual assets and work orders.',
-      icon: TrendingUp,
-      path: '/prediction',
-      color: '#8b5cf6'
-    },
-    {
-      title: 'Risk Ranking',
-      description: 'Rank buildings and systems by overall risk score.',
-      icon: AlertCircle,
-      path: '/risk-ranking',
-      color: '#f59e0b'
-    },
-    {
       title: 'Explainability',
       description: 'Understand why the model makes specific predictions.',
       icon: BarChart3,
       path: '/explainability',
       color: '#8b5cf6'
+    },
+    {
+      title: 'Defect Intelligence',
+      description: 'Analyze recurring defects, defect severity, subsystem patterns, and maintenance insights using NLP/BERTopic.',
+      icon: Wrench,
+      path: '/defect-intelligence',
+      color: '#f97316'
+    },
+    {
+      title: 'Defect Analytics',
+      description: 'Explore defect trends, defect frequency, severity rankings, and building/system-level defect patterns.',
+      icon: LineChart,
+      path: '/defect-analytics',
+      color: '#06b6d4'
     }
   ];
 

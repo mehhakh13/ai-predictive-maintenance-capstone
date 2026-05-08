@@ -1,0 +1,290 @@
+/* ============================================
+   DEFECT ANALYTICS DASHBOARD THEME
+   Faculty Manager UX Redesign
+   ============================================ */
+
+/* Import IBM Plex Mono for numeric values */
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&display=swap');
+
+:root {
+  /* ==================== BASE COLORS ==================== */
+  --bg-deep-navy: #060b18;
+  --bg-navy-lighter: #0f1729;
+  --bg-navy-card: #1a2332;
+
+  /* ==================== SEVERITY SYSTEM ==================== */
+  /* 🔴 Red → Immediate action required */
+  --severity-critical: #DC2626;
+  --severity-critical-bg: rgba(220, 38, 38, 0.1);
+  --severity-critical-border: rgba(220, 38, 38, 0.3);
+
+  /* 🟠 Amber → Urgent, plan this week */
+  --severity-urgent: #F59E0B;
+  --severity-urgent-bg: rgba(245, 158, 11, 0.1);
+  --severity-urgent-border: rgba(245, 158, 11, 0.3);
+
+  /* 🔵 Blue → Monitor, schedule proactively */
+  --severity-monitor: #3B82F6;
+  --severity-monitor-bg: rgba(59, 130, 246, 0.1);
+  --severity-monitor-border: rgba(59, 130, 246, 0.3);
+
+  /* 🟢 Green → OK / no action needed */
+  --severity-ok: #10B981;
+  --severity-ok-bg: rgba(16, 185, 129, 0.1);
+  --severity-ok-border: rgba(16, 185, 129, 0.3);
+
+  /* ==================== CHART COLORS ==================== */
+  --chart-red-1: #EF4444;
+  --chart-red-2: #DC2626;
+  --chart-red-3: #B91C1C;
+
+  --chart-amber-1: #FBBF24;
+  --chart-amber-2: #F59E0B;
+  --chart-amber-3: #D97706;
+
+  --chart-blue-1: #60A5FA;
+  --chart-blue-2: #3B82F6;
+  --chart-blue-3: #2563EB;
+
+  --chart-green-1: #34D399;
+  --chart-green-2: #10B981;
+  --chart-green-3: #059669;
+
+  /* ==================== TEXT COLORS ==================== */
+  --text-primary: #F8FAFC;
+  --text-secondary: #94A3B8;
+  --text-tertiary: #64748B;
+  --text-muted: #475569;
+
+  /* ==================== BORDER COLORS ==================== */
+  --border-subtle: #1E293B;
+  --border-default: #334155;
+  --border-strong: #475569;
+
+  /* ==================== COMPONENT COLORS ==================== */
+  --card-bg: #0f1729;
+  --card-hover: #1a2332;
+  --input-bg: #1a2332;
+  --input-border: #334155;
+
+  /* ==================== STATUS COLORS ==================== */
+  --status-success: #10B981;
+  --status-warning: #F59E0B;
+  --status-error: #DC2626;
+  --status-info: #3B82F6;
+
+  /* ==================== TYPOGRAPHY ==================== */
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+  --font-mono: 'IBM Plex Mono', 'Courier New', monospace;
+
+  /* ==================== SPACING ==================== */
+  --spacing-xs: 0.25rem;
+  --spacing-sm: 0.5rem;
+  --spacing-md: 1rem;
+  --spacing-lg: 1.5rem;
+  --spacing-xl: 2rem;
+  --spacing-2xl: 3rem;
+
+  /* ==================== SHADOWS ==================== */
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.5);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+
+  /* ==================== BORDER RADIUS ==================== */
+  --radius-sm: 0.25rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+}
+
+/* ============================================
+   UTILITY CLASSES
+   ============================================ */
+
+/* Numeric value styling - applies IBM Plex Mono */
+.numeric-value,
+.metric-value,
+.kpi-value,
+.stat-value {
+  font-family: var(--font-mono);
+  font-feature-settings: 'tnum' 1, 'zero' 1; /* Tabular numbers and slashed zero */
+  letter-spacing: -0.02em;
+}
+
+/* Section banners */
+.section-banner {
+  padding: var(--spacing-lg);
+  border-radius: var(--radius-lg);
+  margin-bottom: var(--spacing-lg);
+  border-left: 4px solid;
+}
+
+.section-banner.critical {
+  background: var(--severity-critical-bg);
+  border-color: var(--severity-critical);
+}
+
+.section-banner.urgent {
+  background: var(--severity-urgent-bg);
+  border-color: var(--severity-urgent);
+}
+
+.section-banner.monitor {
+  background: var(--severity-monitor-bg);
+  border-color: var(--severity-monitor);
+}
+
+.section-banner.ok {
+  background: var(--severity-ok-bg);
+  border-color: var(--severity-ok);
+}
+
+/* Priority cards */
+.priority-card {
+  padding: var(--spacing-lg);
+  background: var(--card-bg);
+  border-radius: var(--radius-lg);
+  border-left: 4px solid;
+  margin-bottom: var(--spacing-md);
+  transition: all 0.2s ease;
+}
+
+.priority-card:hover {
+  background: var(--card-hover);
+  transform: translateX(4px);
+}
+
+.priority-card.immediate {
+  border-color: var(--severity-critical);
+  background: var(--severity-critical-bg);
+}
+
+.priority-card.urgent {
+  border-color: var(--severity-urgent);
+  background: var(--severity-urgent-bg);
+}
+
+.priority-card.monitor {
+  border-color: var(--severity-monitor);
+  background: var(--severity-monitor-bg);
+}
+
+/* Status pills */
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.status-pill.immediate {
+  background: var(--severity-critical);
+  color: white;
+}
+
+.status-pill.urgent {
+  background: var(--severity-urgent);
+  color: white;
+}
+
+.status-pill.monitor {
+  background: var(--severity-monitor);
+  color: white;
+}
+
+.status-pill.ok {
+  background: var(--severity-ok);
+  color: white;
+}
+
+/* Model status tiles */
+.model-tile {
+  padding: var(--spacing-lg);
+  border-radius: var(--radius-lg);
+  border: 2px solid;
+  transition: all 0.2s ease;
+}
+
+.model-tile:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
+}
+
+.model-tile.production-ready {
+  border-color: var(--severity-ok);
+  background: var(--severity-ok-bg);
+}
+
+.model-tile.needs-work {
+  border-color: var(--severity-urgent);
+  background: var(--severity-urgent-bg);
+}
+
+.model-tile.not-ready {
+  border-color: var(--severity-critical);
+  background: var(--severity-critical-bg);
+}
+
+/* Tab headers with color coding */
+.tab-header {
+  padding: var(--spacing-lg);
+  border-radius: var(--radius-lg);
+  margin-bottom: var(--spacing-lg);
+  border-top: 3px solid;
+}
+
+.tab-header.overview {
+  border-color: var(--severity-monitor);
+  background: linear-gradient(135deg, var(--bg-navy-lighter) 0%, var(--bg-navy-card) 100%);
+}
+
+.tab-header.recurrence {
+  border-color: var(--severity-urgent);
+  background: var(--severity-urgent-bg);
+}
+
+.tab-header.severity {
+  border-color: var(--severity-critical);
+  background: var(--severity-critical-bg);
+}
+
+.tab-header.environmental {
+  border-color: var(--severity-ok);
+  background: var(--severity-ok-bg);
+}
+
+.tab-header.ai-ml {
+  border-color: var(--severity-monitor);
+  background: var(--severity-monitor-bg);
+}
+
+.tab-header.recommendations {
+  border-color: var(--severity-urgent);
+  background: var(--severity-urgent-bg);
+}
+
+/* ============================================
+   RESPONSIVE BREAKPOINTS
+   ============================================ */
+
+@media (max-width: 900px) {
+  .kpi-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+}
+
+@media (max-width: 640px) {
+  .kpi-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .priority-card {
+    padding: var(--spacing-md);
+  }
+}

@@ -75,19 +75,19 @@ app.add_middleware(
 )
 
 # Load model and data on startup
-MODEL_PATH = "/home/sradmin/ai-predictive-maintenance-capstone/models/xgboost_upm_predictor.pkl"
-DATA_PATH = "/home/sradmin/ai-predictive-maintenance-capstone/data/processed/system_month_data.csv"
-IMPORTANCE_PATH = "/home/sradmin/ai-predictive-maintenance-capstone/models/feature_importance.csv"
-DEFECT_DATA_PATH = "/home/sradmin/ai-predictive-maintenance-capstone/data/bertopic/df_with_topics_IMPROVED.parquet"
-TOPIC_INFO_PATH = "/home/sradmin/ai-predictive-maintenance-capstone/data/bertopic/topic_info_IMPROVED.csv"
+MODEL_PATH = PROJECT_ROOT / "models" / "xgboost_upm_predictor.pkl"
+DATA_PATH = PROJECT_ROOT / "data" / "processed" / "system_month_data.csv"
+IMPORTANCE_PATH = PROJECT_ROOT / "models" / "feature_importance.csv"
+DEFECT_DATA_PATH = PROJECT_ROOT / "data" / "bertopic" / "df_with_topics_IMPROVED.parquet"
+TOPIC_INFO_PATH = PROJECT_ROOT / "data" / "bertopic" / "topic_info_IMPROVED.csv"
 
 # Aggregated defect intelligence data paths
-AGG_DATA_DIR = "/home/sradmin/ai-predictive-maintenance-capstone/data/defect_intelligence/aggregated"
-DEFECT_SUMMARY_PATH = f"{AGG_DATA_DIR}/defect_summary.parquet"
-SYSTEM_DEFECT_PATH = f"{AGG_DATA_DIR}/system_defect.parquet"
-BUILDING_DEFECT_PATH = f"{AGG_DATA_DIR}/building_defect.parquet"
-MONTHLY_DEFECT_PATH = f"{AGG_DATA_DIR}/monthly_defect.parquet"
-IMPACT_SUMMARY_PATH = f"{AGG_DATA_DIR}/impact_summary.parquet"
+AGG_DATA_DIR = PROJECT_ROOT / "data" / "defect_intelligence" / "aggregated"
+DEFECT_SUMMARY_PATH = AGG_DATA_DIR / "defect_summary.parquet"
+SYSTEM_DEFECT_PATH = AGG_DATA_DIR / "system_defect.parquet"
+BUILDING_DEFECT_PATH = AGG_DATA_DIR / "building_defect.parquet"
+MONTHLY_DEFECT_PATH = AGG_DATA_DIR / "monthly_defect.parquet"
+IMPACT_SUMMARY_PATH = AGG_DATA_DIR / "impact_summary.parquet"
 
 model = None
 df_data = None
@@ -107,6 +107,12 @@ shap_df = None
 shap_buildings_meta = None
 shap_feature_cols = None
 
+# Risk Heatmap globals
+df_risk_building = None           # all-years avg: (uni, bld, sys, subsys, month)
+df_risk_university = None         # all-years avg: (uni, sys, subsys, month)
+df_risk_university_yearly = None  # per-year:      (uni, sys, subsys, month, year)
+risk_heatmap_meta = None          # metadata dict
+
 SHAP_MODEL_PATH = PROJECT_ROOT / "models" / "shap_model.pkl"
 SHAP_DATA_PATH = PROJECT_ROOT / "data" / "shap" / "shap_values.parquet"
 SHAP_META_PATH = PROJECT_ROOT / "data" / "shap" / "buildings_meta.json"
@@ -119,22 +125,29 @@ async def load_model_and_data():
     global model, df_data, feature_importance, df_defects, topic_info
     global df_defect_summary, df_system_defect, df_building_defect, df_monthly_defect, df_impact_summary
     global shap_df, shap_buildings_meta, shap_feature_cols
+    global df_risk_building, df_risk_university, df_risk_university_yearly, risk_heatmap_meta
 
+    # Model (optional — fails gracefully if xgboost not installed)
     try:
-        # Load critical data first (fast startup)
         if os.path.exists(MODEL_PATH):
             model = joblib.load(MODEL_PATH)
             print("✓ Model loaded")
-
-        if os.path.exists(DATA_PATH):
-            df_data = pd.read_csv(DATA_PATH)
-            print(f"✓ Data loaded: {len(df_data)} records")
-
         if os.path.exists(IMPORTANCE_PATH):
             feature_importance = pd.read_csv(IMPORTANCE_PATH)
             print("✓ Feature importance loaded")
+    except Exception as e:
+        print(f"Warning: model not loaded: {e}")
 
-        # Load aggregated data (small, fast)
+    # Processed data (loaded independently of model)
+    try:
+        if os.path.exists(DATA_PATH):
+            df_data = pd.read_csv(DATA_PATH)
+            print(f"✓ Data loaded: {len(df_data)} records")
+    except Exception as e:
+        print(f"Warning: processed data not loaded: {e}")
+
+    # Aggregated defect intelligence data (small parquets, fast)
+    try:
         if os.path.exists(DEFECT_SUMMARY_PATH):
             df_defect_summary = pd.read_parquet(DEFECT_SUMMARY_PATH)
             print(f"✓ Defect summary loaded: {len(df_defect_summary)} categories")
@@ -155,11 +168,96 @@ async def load_model_and_data():
             df_impact_summary = pd.read_parquet(IMPACT_SUMMARY_PATH)
             print(f"✓ Impact summary loaded: {len(df_impact_summary)} categories")
 
-        # Load large defect data in background (lazy loading)
-        print("✓ Server ready - defect data will load on first request")
-
+        print("✓ Aggregated defect data ready")
     except Exception as e:
-        print(f"Error loading model/data: {e}")
+        print(f"Error loading aggregated defect data: {e}")
+
+    # Load Risk Heatmap data from FMUCD CSV (has SubsystemDescription + BuildingName)
+    try:
+        fmucd_csv = PROJECT_ROOT / "data" / "Facility Management Unified Classification Database (FMUCD).csv"
+        if fmucd_csv.exists():
+            print("Loading FMUCD CSV for risk heatmap (this takes ~10s)...")
+            raw = pd.read_csv(
+                fmucd_csv,
+                usecols=['UniversityID', 'BuildingID', 'BuildingName',
+                         'SystemDescription', 'SubsystemDescription',
+                         'WOStartDate', 'PPM/UPM'],
+                low_memory=False
+            )
+
+            # Keep only rows with valid building IDs and known work order types
+            raw = raw[
+                raw['BuildingID'].notna() &
+                raw['PPM/UPM'].isin(['UPM', 'PPM'])
+            ].copy()
+
+            # Fill missing building names with the building ID so groupby doesn't drop them
+            raw['BuildingName'] = raw['BuildingName'].fillna(raw['BuildingID'])
+
+            # Extract month and year
+            dt = pd.to_datetime(raw['WOStartDate'], errors='coerce')
+            raw['month'] = dt.dt.month
+            raw['year'] = dt.dt.year
+            raw = raw.dropna(subset=['month', 'year'])
+            raw['month'] = raw['month'].astype(int)
+            raw['year'] = raw['year'].astype(int)
+            raw['is_upm'] = (raw['PPM/UPM'] == 'UPM').astype(int)
+
+            def _agg(grp):
+                g = grp.agg(coverage=('is_upm', 'count'), upm_count=('is_upm', 'sum')).reset_index()
+                g['ml_risk'] = (g['upm_count'] / g['coverage']).round(4)
+                return g.drop(columns='upm_count')
+
+            # Building-level all-years avg: (uni, bld, sys, subsys, month)
+            df_risk_building = _agg(raw.groupby(
+                ['UniversityID', 'BuildingID', 'BuildingName',
+                 'SystemDescription', 'SubsystemDescription', 'month'],
+                observed=True
+            ))
+
+            # University-level all-years avg: (uni, sys, subsys, month)
+            df_risk_university = _agg(raw.groupby(
+                ['UniversityID', 'SystemDescription', 'SubsystemDescription', 'month'],
+                observed=True
+            ))
+
+            # University-level per-year: (uni, sys, subsys, month, year)
+            df_risk_university_yearly = _agg(raw.groupby(
+                ['UniversityID', 'SystemDescription', 'SubsystemDescription', 'month', 'year'],
+                observed=True
+            ))
+
+            # Metadata
+            universities = [int(u) for u in sorted(raw['UniversityID'].unique())]
+            bld_names = raw[['BuildingID', 'BuildingName']].drop_duplicates('BuildingID')
+            bld_names = bld_names[bld_names['BuildingID'].notna() & bld_names['BuildingName'].notna()]
+            name_lookup = {
+                str(row.BuildingID): str(row.BuildingName)
+                for row in bld_names.itertuples(index=False)
+            }
+            buildings_by_uni = (
+                raw[raw['BuildingID'].notna()]
+                .groupby('UniversityID')['BuildingID']
+                .apply(lambda x: sorted([str(b) for b in x.unique()]))
+                .to_dict()
+            )
+            years_by_uni = (
+                raw.groupby('UniversityID')['year']
+                .apply(lambda x: sorted(x.unique().tolist()))
+                .to_dict()
+            )
+            risk_heatmap_meta = {
+                "universities": universities,
+                "buildings_by_university": {str(int(u)): v for u, v in buildings_by_uni.items()},
+                "building_names": name_lookup,
+                "years_by_university": {str(int(u)): v for u, v in years_by_uni.items()},
+            }
+            print(f"✓ Risk heatmap loaded from FMUCD CSV: {len(df_risk_building):,} building rows, "
+                  f"{len(df_risk_university):,} university rows, {len(universities)} universities")
+        else:
+            print("⚠ Risk heatmap: FMUCD CSV not found")
+    except Exception as e:
+        print(f"Warning: Risk heatmap data not loaded — {e}")
 
     # Load SHAP artifacts
     try:
@@ -182,17 +280,16 @@ async def load_model_and_data():
 
 
 def load_defect_data_if_needed():
-    """Lazy load large defect intelligence data on first request"""
     global df_defects, topic_info
+
+    if topic_info is None and os.path.exists(TOPIC_INFO_PATH):
+        topic_info = pd.read_csv(TOPIC_INFO_PATH)
+        print(f"✓ Topic info loaded: {len(topic_info)} topics")
 
     if df_defects is None and os.path.exists(DEFECT_DATA_PATH):
         print("Loading defect data (first request)...")
         df_defects = pd.read_parquet(DEFECT_DATA_PATH)
         print(f"✓ Defect data loaded: {len(df_defects)} records")
-
-    if topic_info is None and os.path.exists(TOPIC_INFO_PATH):
-        topic_info = pd.read_csv(TOPIC_INFO_PATH)
-        print(f"✓ Topic info loaded: {len(topic_info)} topics")
 
 
 # Response models
@@ -632,83 +729,78 @@ async def get_defect_intelligence(
         raise HTTPException(status_code=503, detail="Defect data not loaded")
 
     try:
-        # Create a copy for filtering
-        df = df_defects.copy()
+        df = df_defects  # read-only reference; no copy until we mutate
 
-        # Create defect type labels
         topic_to_name = dict(zip(topic_info['Topic'], topic_info['Name']))
-        df['defect_type'] = df['topic_id'].apply(
-            lambda tid: create_defect_label(topic_to_name.get(tid, f'topic_{tid}'), tid)
-        )
 
-        # Generate synthetic costs (DMC field in raw data is empty, so we estimate based on defect type)
-        # Cost calculation uses: defect complexity, priority, and duration from real work orders
-        np.random.seed(42)  # For reproducibility
-        df['TotalCost'] = df.apply(lambda row: calculate_defect_cost(row, row['topic_id']), axis=1)
+        # Build label map on unique topic_ids only (~100 values, not 2M rows)
+        unique_tids = df['topic_id'].unique()
+        topic_to_label = {
+            int(tid): create_defect_label(topic_to_name.get(tid, f'topic_{tid}'), int(tid))
+            for tid in unique_tids
+        }
 
-        # Create university names
-        university_mapping = {10: 'University 10', 11: 'University 11', 12: 'University 12'}
+        # Collect metadata from full df using vectorized/unique ops (fast)
+        univ_ids = sorted(df['UniversityID'].dropna().unique().astype(int).tolist())
+        all_defect_types = sorted(set(topic_to_label.values()))
+        systems = sorted(df['SystemDescription'].dropna().unique().tolist())
+
+        # Apply filters using boolean masks (vectorized, no apply)
+        mask = pd.Series(True, index=df.index)
+        if universityId and universityId != 'all':
+            mask &= df['UniversityID'] == int(universityId)
+        if buildingId and buildingId != 'all':
+            mask &= df['BuildingID'] == buildingId
+        if defectType and defectType != 'all':
+            matching_tids = [tid for tid, label in topic_to_label.items() if label == defectType]
+            mask &= df['topic_id'].isin(matching_tids)
+        if system and system != 'all':
+            mask &= df['SystemDescription'] == system
+        if startDate:
+            mask &= pd.to_datetime(df['WOStartDate']) >= pd.to_datetime(startDate)
+        if endDate:
+            mask &= pd.to_datetime(df['WOStartDate']) <= pd.to_datetime(endDate)
+
+        # Limit to result set BEFORE any expensive per-row work
+        df = df[mask].sort_values('WOStartDate', ascending=False).head(limit).copy()
+
+        # Now do all per-row transformations on ≤100 rows
+        df['defect_type'] = df['topic_id'].map(topic_to_label)
+        df['TotalCost'] = pd.to_numeric(df['TotalCost'], errors='coerce').fillna(0)
+        zero_mask = df['TotalCost'] == 0
+        if zero_mask.any():
+            df.loc[zero_mask, 'TotalCost'] = df[zero_mask].apply(
+                lambda row: calculate_defect_cost(row, int(row['topic_id'])), axis=1
+            )
+
+        university_mapping = {uid: f'University {uid}' for uid in univ_ids}
         df['UniversityName'] = df['UniversityID'].map(university_mapping).fillna('Unknown University')
 
-        # Create building names (using BuildingID if available)
         df['BuildingName'] = df['BuildingID'].apply(
-            lambda bid: str(bid) if pd.notna(bid) and bid != 'nan' else 'Unknown'
+            lambda bid: str(bid) if pd.notna(bid) and str(bid) != 'nan' else 'Unknown'
         )
 
-        # Add synthetic status
-        statuses = ['Completed', 'Completed', 'Completed', 'In Progress']  # 75% completed
+        statuses = ['Completed', 'Completed', 'Completed', 'In Progress']
         df['Status'] = [statuses[i % len(statuses)] for i in range(len(df))]
 
-        # Add WOId if not present
         if 'WOId' not in df.columns:
             df['WOId'] = [f'WO-{str(i+1).zfill(6)}' for i in range(len(df))]
 
-        # Apply filters
+        # Buildings metadata
+        universities = [{'id': uid, 'name': f'University {uid}'} for uid in univ_ids]
         if universityId and universityId != 'all':
-            df = df[df['UniversityID'] == int(universityId)]
+            df_for_buildings = df_defects[df_defects['UniversityID'] == int(universityId)]
+        else:
+            df_for_buildings = df_defects
+        buildings_raw = df_for_buildings['BuildingID'].dropna().unique()
+        buildings_raw = [b for b in buildings_raw if str(b) != 'nan']
+        buildings = sorted([{'id': str(bid), 'name': str(bid)} for bid in buildings_raw], key=lambda x: x['id'])
 
-        if buildingId and buildingId != 'all':
-            df = df[df['BuildingID'] == buildingId]
-
-        if defectType and defectType != 'all':
-            df = df[df['defect_type'] == defectType]
-
-        if system and system != 'all':
-            df = df[df['SystemDescription'] == system]
-
-        if startDate:
-            df = df[pd.to_datetime(df['WOStartDate']) >= pd.to_datetime(startDate)]
-
-        if endDate:
-            df = df[pd.to_datetime(df['WOStartDate']) <= pd.to_datetime(endDate)]
-
-        # Sort by date (newest first) and limit
-        df = df.sort_values('WOStartDate', ascending=False).head(limit)
-
-        # Prepare metadata (from full dataset for filter options)
-        universities = [
-            {'id': int(uid), 'name': name}
-            for uid, name in university_mapping.items()
-        ]
-
-        buildings = df_defects['BuildingID'].dropna().unique()
-        buildings = [
-            {'id': str(bid), 'name': str(bid)}
-            for bid in buildings if bid != 'nan'
-        ][:50]  # Limit to 50 buildings
-
-        all_defect_types = df_defects['topic_id'].map(
-            lambda tid: create_defect_label(topic_to_name.get(tid, f'topic_{tid}'), tid)
-        ).unique().tolist()
-
-        systems = sorted(df_defects['SystemDescription'].dropna().unique().tolist())
-
-        # Convert to response format
         data = []
         for _, row in df.iterrows():
             data.append({
-                'WOId': row.get('WOId', 'N/A'),
-                'WODescription': row['WODescription'][:200] if pd.notna(row['WODescription']) else 'N/A',
+                'WOId': str(row.get('WOId', 'N/A')),
+                'WODescription': row['WODescription'][:200] if pd.notna(row.get('WODescription')) else 'N/A',
                 'defect_type': row['defect_type'],
                 'SystemDescription': row['SystemDescription'],
                 'BuildingID': str(row['BuildingID']) if pd.notna(row['BuildingID']) else None,
@@ -717,7 +809,7 @@ async def get_defect_intelligence(
                 'BuildingName': row['BuildingName'],
                 'TotalCost': float(row['TotalCost']),
                 'WOStartDate': str(row['WOStartDate'])[:10],
-                'WOPriority': str(row['WOPriority']) if pd.notna(row['WOPriority']) else None,
+                'WOPriority': str(row['WOPriority']) if pd.notna(row.get('WOPriority')) else None,
                 'Status': row['Status'],
                 'topic_id': int(row['topic_id'])
             })
@@ -1008,6 +1100,16 @@ async def get_defect_impact_ranking(
         raise HTTPException(status_code=500, detail=f"Error processing impact data: {str(e)}")
 
 
+@app.get("/api/defects/survival-model")
+async def get_survival_model():
+    """Serve Cox survival model results"""
+    survival_path = PROJECT_ROOT / "data" / "ml_defect_analytics" / "survival_cox_model.json"
+    if not survival_path.exists():
+        raise HTTPException(status_code=404, detail="Survival model data not found")
+    with open(survival_path) as f:
+        return json.load(f)
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # SHAP Explainability Endpoints
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1181,6 +1283,86 @@ async def get_shap_explanation(
         'month': month,
         'subsystems': subsystems,
     }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Risk Heatmap Endpoints
+# ─────────────────────────────────────────────────────────────────────────────
+
+@app.get("/api/risk-heatmap/metadata")
+async def get_risk_heatmap_metadata():
+    """Universities, buildings list, and building names for filter dropdowns."""
+    if risk_heatmap_meta is None:
+        raise HTTPException(status_code=503, detail="Risk heatmap data not loaded")
+    return risk_heatmap_meta
+
+
+@app.get("/api/risk-heatmap/university")
+async def get_university_risk_heatmap(universityId: int = 10, year: Optional[int] = None):
+    """
+    University-level heatmap: system × month for the given university.
+    Pass year= to get a specific year's data; omit for all-years historical average.
+    """
+    if df_risk_university is None:
+        raise HTTPException(status_code=503, detail="Risk heatmap data not loaded")
+
+    if year is not None and df_risk_university_yearly is not None:
+        subset = df_risk_university_yearly[
+            (df_risk_university_yearly['UniversityID'] == universityId) &
+            (df_risk_university_yearly['year'] == year)
+        ]
+    else:
+        subset = df_risk_university[df_risk_university['UniversityID'] == universityId]
+
+    if subset.empty:
+        raise HTTPException(status_code=404, detail=f"No data for university {universityId}")
+
+    result = []
+    for row in subset.itertuples(index=False):
+        result.append({
+            "UniversityID": int(row.UniversityID),
+            "SystemDescription": row.SystemDescription,
+            "SubsystemDescription": row.SubsystemDescription,
+            "MonthNum": int(row.month),
+            "ml_risk": float(row.ml_risk),
+            "hist_asset_rate": float(row.ml_risk),
+            "hist_shock_rate": 0.0,
+            "coverage": int(row.coverage),
+        })
+    return result
+
+
+@app.get("/api/risk-heatmap/building")
+async def get_building_risk_heatmap(buildingId: str, universityId: int = 10):
+    """
+    Building-level heatmap: system × month for a single building.
+    Returns rows in the schema the frontend hook expects.
+    """
+    if df_risk_building is None:
+        raise HTTPException(status_code=503, detail="Risk heatmap data not loaded")
+
+    subset = df_risk_building[
+        (df_risk_building['BuildingID'] == buildingId) &
+        (df_risk_building['UniversityID'] == universityId)
+    ]
+    if subset.empty:
+        raise HTTPException(status_code=404, detail=f"No data for building {buildingId} in university {universityId}")
+
+    result = []
+    for row in subset.itertuples(index=False):
+        result.append({
+            "UniversityID": int(row.UniversityID),
+            "BuildingID": row.BuildingID,
+            "BuildingName": row.BuildingName,
+            "SystemDescription": row.SystemDescription,
+            "SubsystemDescription": row.SubsystemDescription,
+            "MonthNum": int(row.month),
+            "ml_risk": float(row.ml_risk),
+            "hist_asset_rate": float(row.ml_risk),
+            "hist_shock_rate": 0.0,
+            "coverage": int(row.coverage),
+        })
+    return result
 
 
 if __name__ == "__main__":

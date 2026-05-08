@@ -10,11 +10,14 @@ const MonthlyTrendsChart = ({ data, selectedCategories = [] }) => {
   const chartData = useMemo(() => {
     if (!data || !Array.isArray(data)) return [];
 
+    const DISPLAY_START = '2015-01';
+
     // Group by month
     const monthlyMap = new Map();
 
     data.forEach(item => {
       const month = item.month;
+      if (month < DISPLAY_START) return;
       if (!monthlyMap.has(month)) {
         monthlyMap.set(month, { month, total: 0, categories: {} });
       }
@@ -126,6 +129,8 @@ const MonthlyTrendsChart = ({ data, selectedCategories = [] }) => {
         <h3>Monthly Defect Trends</h3>
         <span className="monthly-subtitle">
           {topCategories.length > 0 ? `Top ${topCategories.length} defect categories` : 'All defects over time'}
+          {' · '}
+          <span style={{ color: '#64748b', fontSize: '11px' }}>2015–present (data sparse before 2015)</span>
         </span>
       </div>
 

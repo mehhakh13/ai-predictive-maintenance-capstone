@@ -9,8 +9,11 @@ export default defineConfig({
     port: 5173,
     strictPort: true,
     hmr: {
-      clientPort: 443, // GitHub Codespaces uses HTTPS (port 443)
-      protocol: 'wss', // Use secure websocket for HMR
+      clientPort: 443,
+      protocol: 'wss',
     },
+    proxy: {
+      '/api': 'http://localhost:8000'
+    }
   },
 })
